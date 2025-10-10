@@ -1,1 +1,1 @@
-# LandCare
+# LandCare-AI
