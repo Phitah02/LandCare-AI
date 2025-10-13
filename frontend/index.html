@@ -3,171 +3,258 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LandCare AI - Agricultural Analysis Platform</title>
+    <title>LandCare AI - Land Analysis Platform</title>
+    <link rel="icon" type="image/x-icon" href="assets/favicon/favicon.ico">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon/favicon-32x32.png">
+    <link rel="apple-touch-icon" href="assets/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon/android-chrome-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="assets/favicon/android-chrome-512x512.png">
+    <link rel="manifest" href="assets/favicon/site.webmanifest">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <div id="app">
-        <header>
-            <div class="header-content">
-                <div class="header-text">
-            <h1>LandCare AI</h1>
-            <p>Agricultural Analysis Platform</p>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <img src="assets/LandCare AI logo.svg" alt="LandCare AI Logo" class="logo-image">
+                <div class="logo-text">
+                    <h2>LandCare AI</h2>
+                    <p>Land Analysis Platform</p>
                 </div>
-                <div class="status-indicator">
-                    <div id="connection-status" class="status-dot"></div>
-                    <span id="status-text">Ready</span>
-                </div>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#hero">Home</a></li>
+                <li><a href="#features">About us</a></li>
+                <li><a href="#future">Our Impact</a></li>
+                <li><a href="#cta-footer">Get involved</a></li>
+            </ul>
+            <div class="nav-actions">
                 <button id="theme-toggle" class="theme-toggle-btn">🌙 Dark Mode</button>
             </div>
-        </header>
-
-        <div id="toolbar">
-            <div id="roi-input-container">
-                <input type="text" id="roi-input" placeholder="Enter place name (e.g., Kajiado County, Nairobi)" />
-                <button id="search-location">Search Location</button>
-            </div>
-            <div id="drawing-controls">
-                <button id="draw-polygon">Draw Polygon</button>
-                <button id="clear-drawings">Clear/Reset</button>
-                <button id="analyze">Analyze</button>
+            <div class="nav-toggle">
+                <span></span>
+                <span></span>
+                <span></span>
             </div>
         </div>
+    </nav>
+    <div id="app">
+        <section id="hero" class="hero-section">
+            <div class="hero-content">
+                <h1>See Your Local Environment. Understand Its Future.</h1>
+                <p>Explore the health of your community's land, forecast environmental changes, and discover how you can contribute to a greener future.</p>
+                <div class="hero-actions">
+                    <button class="btn-primary">Explore Your Area</button>
+                    <button class="btn-secondary">Learn More</button>
+                </div>
+            </div>
+        </section>
 
-        <div id="main-content">
-        <div id="map-container">
-            <div id="map"></div>
-            <div id="map-legend" class="map-legend">
-                <h4>NDVI Legend</h4>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #388e3c;"></div>
-                    <span>High Vegetation (0.8+)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #4caf50;"></div>
-                    <span>Good Vegetation (0.6-0.8)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #ffc107;"></div>
-                    <span>Moderate Vegetation (0.4-0.6)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #ff9800;"></div>
-                    <span>Low Vegetation (0.2-0.4)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #d32f2f;"></div>
-                    <span>Very Low Vegetation (&lt;0.2)</span>
-                </div>
-                
-                <hr style="margin: 10px 0; border: 1px solid #ddd;">
-                
-                <h4>Risk Assessment</h4>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #d32f2f;"></div>
-                    <span>High Risk</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #ffc107;"></div>
-                    <span>Medium Risk</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #28a745;"></div>
-                    <span>Low Risk</span>
-                </div>
-            </div>
-        </div>
-
-        <div id="results-panel">
-            <div id="results-header">
-            <h3>Analysis Results</h3>
-                <div id="risk-indicator" class="risk-indicator">
-                    <span id="risk-level">-</span>
-                    <span id="risk-score">-</span>
-                </div>
-            </div>
-            
-            <div id="results-tabs">
-                <button class="tab-button active" data-tab="overview">Statistics</button>
-                <button class="tab-button" data-tab="risk">Risk Analysis</button>
-            </div>
-            
-            <div id="results-content">
-                <div id="overview-tab" class="tab-content active">
-                    <div class="basic-statistics">
-                        <div class="stat-item">
-                            <span class="stat-label">NDVI:</span>
-                            <span class="stat-value" id="ndvi-value">-</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Area:</span>
-                            <span class="stat-value" id="area-value">-</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Land Cover:</span>
-                            <span class="stat-value" id="land-cover-summary">-</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Slope:</span>
-                            <span class="stat-value" id="slope-value">-</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Temperature:</span>
-                            <span class="stat-value" id="temperature-value">-</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Humidity:</span>
-                            <span class="stat-value" id="humidity-value">-</span>
-                        </div>
+        <section id="features" class="features-section">
+            <div class="container">
+                <h2>Key Analysis Areas</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <i class="fas fa-leaf"></i>
+                        <h3>Vegetation</h3>
+                        <p>Monitor NDVI and vegetation health using satellite imagery to assess land productivity.</p>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-mountain"></i>
+                        <h3>Soil</h3>
+                        <p>Assess erosion risk, slope analysis, and land cover types for sustainable management.</p>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-tint"></i>
+                        <h3>Water</h3>
+                        <p>Integrate weather data for humidity, precipitation, and water resource analysis.</p>
                     </div>
                 </div>
-                
-                <div id="risk-tab" class="tab-content">
-                    <div class="risk-breakdown">
-                        <h4>Risk Factors</h4>
-                        <div class="risk-factor">
-                            <span class="risk-label">Vegetation Risk:</span>
-                            <div class="risk-meter">
-                                <div class="risk-fill" id="vegetation-risk-fill"></div>
-                                <span class="risk-percentage" id="vegetation-risk-percent">-</span>
+            </div>
+        </section>
+
+        <section id="explore" class="explore-section">
+            <div class="container">
+                <h2>Explore your area</h2>
+                <div id="status-indicator" class="status-indicator">
+                    <div id="connection-status" class="status-dot"></div>
+                    <span id="status-text">Connected</span>
+                </div>
+                <div id="toolbar">
+                    <div id="roi-input-container">
+                        <input type="text" id="roi-input" placeholder="Enter place name (e.g., Kajiado County, Nairobi)" />
+                        <button id="search-location">Search Location</button>
+                    </div>
+                    <div id="drawing-controls">
+                        <button id="draw-polygon">Draw Polygon</button>
+                        <button id="clear-drawings">Clear/Reset</button>
+                        <button id="analyze">Analyze</button>
+                    </div>
+                </div>
+
+                <div id="explore-content">
+                    <div id="map-container">
+                        <div id="map"></div>
+                        <div id="map-legend" class="map-legend">
+                            <h4>NDVI Legend</h4>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #388e3c;"></div>
+                                <span>High Vegetation (0.8+)</span>
                             </div>
-                        </div>
-                        <div class="risk-factor">
-                            <span class="risk-label">Land Cover Risk:</span>
-                            <div class="risk-meter">
-                                <div class="risk-fill" id="landcover-risk-fill"></div>
-                                <span class="risk-percentage" id="landcover-risk-percent">-</span>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #4caf50;"></div>
+                                <span>Good Vegetation (0.6-0.8)</span>
                             </div>
-                        </div>
-                        <div class="risk-factor">
-                            <span class="risk-label">Erosion Risk:</span>
-                            <div class="risk-meter">
-                                <div class="risk-fill" id="erosion-risk-fill"></div>
-                                <span class="risk-percentage" id="erosion-risk-percent">-</span>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #ffc107;"></div>
+                                <span>Moderate Vegetation (0.4-0.6)</span>
                             </div>
-                        </div>
-                        <div class="risk-factor">
-                            <span class="risk-label">Weather Risk:</span>
-                            <div class="risk-meter">
-                                <div class="risk-fill" id="weather-risk-fill"></div>
-                                <span class="risk-percentage" id="weather-risk-percent">-</span>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #ff9800;"></div>
+                                <span>Low Vegetation (0.2-0.4)</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #d32f2f;"></div>
+                                <span>Very Low Vegetation (<0.2)</span>
+                            </div>
+                            
+                            <hr style="margin: 10px 0; border: 1px solid #ddd;">
+                            
+                            <h4>Risk Assessment</h4>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #d32f2f;"></div>
+                                <span>High Risk</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #ffc107;"></div>
+                                <span>Medium Risk</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #28a745;"></div>
+                                <span>Low Risk</span>
                             </div>
                         </div>
                     </div>
-                    <div class="early-warnings" id="early-warnings-section">
-                        <h4>Early Warnings</h4>
-                        <div id="warnings-list"></div>
+
+                    <div id="results-panel">
+                        <div id="results-header">
+                        <h3>Analysis Results</h3>
+                            <div id="risk-indicator" class="risk-indicator">
+                                <span id="risk-level">-</span>
+                                <span id="risk-score">-</span>
+                            </div>
+                        </div>
+                        
+                        <div id="results-tabs">
+                            <button class="tab-button active" data-tab="overview">Statistics</button>
+                            <button class="tab-button" data-tab="risk">Risk Analysis</button>
+                        </div>
+                        
+                        <div id="results-content">
+                            <div id="overview-tab" class="tab-content active">
+                                <div class="basic-statistics">
+                                    <div class="stat-item">
+                                        <span class="stat-label">NDVI:</span>
+                                        <span class="stat-value" id="ndvi-value">-</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">Area:</span>
+                                        <span class="stat-value" id="area-value">-</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">Land Cover:</span>
+                                        <span class="stat-value" id="land-cover-summary">-</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">Slope:</span>
+                                        <span class="stat-value" id="slope-value">-</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">Temperature:</span>
+                                        <span class="stat-value" id="temperature-value">-</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">Humidity:</span>
+                                        <span class="stat-value" id="humidity-value">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="risk-tab" class="tab-content">
+                                <div class="risk-breakdown">
+                                    <h4>Risk Factors</h4>
+                                    <div class="risk-factor">
+                                        <span class="risk-label">Vegetation Risk:</span>
+                                        <div class="risk-meter">
+                                            <div class="risk-fill" id="vegetation-risk-fill"></div>
+                                            <span class="risk-percentage" id="vegetation-risk-percent">-</span>
+                                        </div>
+                                    </div>
+                                    <div class="risk-factor">
+                                        <span class="risk-label">Land Cover Risk:</span>
+                                        <div class="risk-meter">
+                                            <div class="risk-fill" id="landcover-risk-fill"></div>
+                                            <span class="risk-percentage" id="landcover-risk-percent">-</span>
+                                        </div>
+                                    </div>
+                                    <div class="risk-factor">
+                                        <span class="risk-label">Erosion Risk:</span>
+                                        <div class="risk-meter">
+                                            <div class="risk-fill" id="erosion-risk-fill"></div>
+                                            <span class="risk-percentage" id="erosion-risk-percent">-</span>
+                                        </div>
+                                    </div>
+                                    <div class="risk-factor">
+                                        <span class="risk-label">Weather Risk:</span>
+                                        <div class="risk-meter">
+                                            <div class="risk-fill" id="weather-risk-fill"></div>
+                                            <span class="risk-percentage" id="weather-risk-percent">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="early-warnings" id="early-warnings-section">
+                                    <h4>Early Warnings</h4>
+                                    <div id="warnings-list"></div>
+                                </div>
+                            </div>
+                            
+                        </div>
+                        
+                        <div id="default-message">
+                            <p>Draw a polygon on the map and click Analyze to get comprehensive land analysis.</p>
+                        </div>
                     </div>
                 </div>
-                
             </div>
-            
-            <div id="default-message">
-                <p>Draw a polygon on the map and click Analyze to get comprehensive land analysis.</p>
+        </section>
+
+        <section id="future" class="future-section">
+            <div class="container">
+                <h2>What does the future hold?</h2>
+                <div class="charts-container">
+                    <div class="chart-item">
+                        <h3>Vegetation Health Trends</h3>
+                        <canvas id="health-trend-chart"></canvas>
+                    </div>
+                    <div class="chart-item">
+                        <h3>Risk Levels Over Time</h3>
+                        <canvas id="risk-level-chart"></canvas>
+                    </div>
+                </div>
             </div>
-        </div>
+        </section>
+
+        <footer id="cta-footer" class="cta-footer">
+            <div class="container">
+                <h2>Be part of the solution</h2>
+                <p>Join us in protecting our land and environment.</p>
+                <a href="#explore" class="cta-button">Start Exploring</a>
+            </div>
+        </footer>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

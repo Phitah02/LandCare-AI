@@ -17,6 +17,51 @@ class LandCareApp {
 
     initEventListeners() {
         console.log('initEventListeners called');
+
+        // Navigation toggle for mobile
+        const navToggle = document.querySelector('.nav-toggle');
+        const navMenu = document.querySelector('.nav-menu');
+        if (navToggle && navMenu) {
+            navToggle.addEventListener('click', () => {
+                navMenu.classList.toggle('active');
+                navToggle.classList.toggle('active');
+            });
+        }
+
+        // Smooth scrolling for navigation links
+        const navLinks = document.querySelectorAll('.nav-menu a');
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetId = link.getAttribute('href').substring(1);
+                const targetSection = document.getElementById(targetId);
+                if (targetSection) {
+                    targetSection.scrollIntoView({ behavior: 'smooth' });
+                    // Close mobile menu after clicking
+                    if (navMenu.classList.contains('active')) {
+                        navMenu.classList.remove('active');
+                        navToggle.classList.remove('active');
+                    }
+                }
+            });
+        });
+
+        // Smooth scrolling for Explore Your Area button
+        const exploreBtn = document.querySelector('.hero-actions .btn-primary');
+        if (exploreBtn) {
+            exploreBtn.addEventListener('click', () => {
+                const targetSection = document.getElementById('explore');
+                if (targetSection) {
+                    targetSection.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        }
+
+        // Update active nav link on scroll
+        window.addEventListener('scroll', () => {
+            this.updateActiveNavLink();
+        });
+
         const drawBtn = document.getElementById('draw-polygon');
         if (drawBtn) {
             drawBtn.addEventListener('click', () => {
@@ -130,6 +175,28 @@ class LandCareApp {
         if (themeToggle) {
             themeToggle.textContent = theme === 'light' ? '🌙 Dark' : '☀️ Light';
         }
+    }
+
+    updateActiveNavLink() {
+        const sections = document.querySelectorAll('section');
+        const navLinks = document.querySelectorAll('.nav-menu a');
+
+        let currentSection = '';
+
+        sections.forEach(section => {
+            const sectionTop = section.offsetTop;
+            const sectionHeight = section.clientHeight;
+            if (window.pageYOffset >= sectionTop - sectionHeight / 3) {
+                currentSection = section.getAttribute('id');
+            }
+        });
+
+        navLinks.forEach(link => {
+            link.classList.remove('active');
+            if (link.getAttribute('href').substring(1) === currentSection) {
+                link.classList.add('active');
+            }
+        });
     }
 
     initTabs() {
@@ -848,6 +915,25 @@ class LandCareApp {
     }
 
     // Display Methods for Historical and Forecast Data
+    getChartColors() {
+        const theme = document.documentElement.getAttribute('data-theme') || 'light';
+        if (theme === 'dark') {
+            return {
+                ndvi: { border: 'rgb(100, 255, 255)', background: 'rgba(100, 255, 255, 0.2)' },
+                temperature: { border: 'rgb(255, 150, 150)', background: 'rgba(255, 150, 150, 0.2)' },
+                precipitation: { border: 'rgb(150, 200, 255)', background: 'rgba(150, 200, 255, 0.2)' },
+                forecastNdvi: { border: 'rgb(255, 200, 100)', background: 'rgba(255, 200, 100, 0.2)' }
+            };
+        } else {
+            return {
+                ndvi: { border: 'rgb(75, 192, 192)', background: 'rgba(75, 192, 192, 0.2)' },
+                temperature: { border: 'rgb(255, 99, 132)', background: 'rgba(255, 99, 132, 0.2)' },
+                precipitation: { border: 'rgb(54, 162, 235)', background: 'rgba(54, 162, 235, 0.2)' },
+                forecastNdvi: { border: 'rgb(255, 159, 64)', background: 'rgba(255, 159, 64, 0.2)' }
+            };
+        }
+    }
+
     displayHistoricalNDVI(data) {
         const canvas = document.getElementById('ndvi-chart');
         if (!canvas) return;
@@ -855,6 +941,10 @@ class LandCareApp {
         const ctx = canvas.getContext('2d');
         const dates = data.dates || [];
         const ndviValues = data.ndvi_values || [];
+        const colors = this.getChartColors();
+        const theme = document.documentElement.getAttribute('data-theme') || 'light';
+        const textColor = theme === 'dark' ? '#ffffff' : '#000000';
+        const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
 
         new Chart(ctx, {
             type: 'line',
@@ -863,23 +953,36 @@ class LandCareApp {
                 datasets: [{
                     label: 'NDVI',
                     data: ndviValues,
-                    borderColor: 'rgb(75, 192, 192)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: colors.ndvi.border,
+                    backgroundColor: colors.ndvi.background,
                     tension: 0.1
                 }]
             },
             options: {
                 responsive: true,
+                backgroundColor: theme === 'dark' ? '#2a2a2a' : '#ffffff',
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Historical NDVI Trends'
+                        text: 'Historical NDVI Trends',
+                        color: textColor
+                    },
+                    legend: {
+                        labels: {
+                            color: textColor
+                        }
                     }
                 },
                 scales: {
+                    x: {
+                        ticks: { color: textColor },
+                        grid: { color: gridColor }
+                    },
                     y: {
                         beginAtZero: true,
-                        max: 1
+                        max: 1,
+                        ticks: { color: textColor },
+                        grid: { color: gridColor }
                     }
                 }
             }
@@ -894,6 +997,10 @@ class LandCareApp {
         const dates = data.dates || [];
         const tempData = data.temperature || [];
         const precipData = data.rainfall || [];
+        const colors = this.getChartColors();
+        const theme = document.documentElement.getAttribute('data-theme') || 'light';
+        const textColor = theme === 'dark' ? '#ffffff' : '#000000';
+        const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
 
         new Chart(ctx, {
             type: 'line',
@@ -902,34 +1009,50 @@ class LandCareApp {
                 datasets: [{
                     label: 'Temperature (°C)',
                     data: tempData,
-                    borderColor: 'rgb(255, 99, 132)',
+                    borderColor: colors.temperature.border,
+                    backgroundColor: colors.temperature.background,
                     yAxisID: 'y',
                     tension: 0.1
                 }, {
                     label: 'Precipitation (mm)',
                     data: precipData,
-                    borderColor: 'rgb(54, 162, 235)',
+                    borderColor: colors.precipitation.border,
+                    backgroundColor: colors.precipitation.background,
                     yAxisID: 'y1',
                     tension: 0.1
                 }]
             },
             options: {
                 responsive: true,
+                backgroundColor: theme === 'dark' ? '#2a2a2a' : '#ffffff',
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Historical Weather Trends'
+                        text: 'Historical Weather Trends',
+                        color: textColor
+                    },
+                    legend: {
+                        labels: {
+                            color: textColor
+                        }
                     }
                 },
                 scales: {
+                    x: {
+                        ticks: { color: textColor },
+                        grid: { color: gridColor }
+                    },
                     y: {
                         type: 'linear',
                         display: true,
                         position: 'left',
                         title: {
                             display: true,
-                            text: 'Temperature (°C)'
-                        }
+                            text: 'Temperature (°C)',
+                            color: textColor
+                        },
+                        ticks: { color: textColor },
+                        grid: { color: gridColor }
                     },
                     y1: {
                         type: 'linear',
@@ -937,8 +1060,10 @@ class LandCareApp {
                         position: 'right',
                         title: {
                             display: true,
-                            text: 'Precipitation (mm)'
+                            text: 'Precipitation (mm)',
+                            color: textColor
                         },
+                        ticks: { color: textColor },
                         grid: {
                             drawOnChartArea: false,
                         },
@@ -955,6 +1080,12 @@ class LandCareApp {
         const ctx = canvas.getContext('2d');
         const months = data.map(item => item.month);
         const ndviValues = data.map(item => item.ndvi);
+        const colors = this.getChartColors();
+        const theme = document.documentElement.getAttribute('data-theme') || 'light';
+        const textColor = theme === 'dark' ? '#ffffff' : '#000000';
+        const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
+
+        ctx.canvas.style.backgroundColor = theme === 'dark' ? '#2a2a2a' : '#ffffff';
 
         new Chart(ctx, {
             type: 'line',
@@ -963,8 +1094,8 @@ class LandCareApp {
                 datasets: [{
                     label: 'Forecasted NDVI',
                     data: ndviValues,
-                    borderColor: 'rgb(255, 159, 64)',
-                    backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                    borderColor: colors.forecastNdvi.border,
+                    backgroundColor: colors.forecastNdvi.background,
                     tension: 0.1
                 }]
             },
@@ -973,13 +1104,25 @@ class LandCareApp {
                 plugins: {
                     title: {
                         display: true,
-                        text: 'NDVI Forecast'
+                        text: 'NDVI Forecast',
+                        color: textColor
+                    },
+                    legend: {
+                        labels: {
+                            color: textColor
+                        }
                     }
                 },
                 scales: {
+                    x: {
+                        ticks: { color: textColor },
+                        grid: { color: gridColor }
+                    },
                     y: {
                         beginAtZero: true,
-                        max: 1
+                        max: 1,
+                        ticks: { color: textColor },
+                        grid: { color: gridColor }
                     }
                 }
             }
@@ -994,6 +1137,12 @@ class LandCareApp {
         const months = data.map(item => item.month);
         const tempData = data.map(item => item.temperature);
         const precipData = data.map(item => item.precipitation);
+        const colors = this.getChartColors();
+        const theme = document.documentElement.getAttribute('data-theme') || 'light';
+        const textColor = theme === 'dark' ? '#ffffff' : '#000000';
+        const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
+
+        ctx.canvas.style.backgroundColor = theme === 'dark' ? '#2a2a2a' : '#ffffff';
 
         new Chart(ctx, {
             type: 'line',
@@ -1002,13 +1151,15 @@ class LandCareApp {
                 datasets: [{
                     label: 'Temperature (°C)',
                     data: tempData,
-                    borderColor: 'rgb(255, 99, 132)',
+                    borderColor: colors.temperature.border,
+                    backgroundColor: colors.temperature.background,
                     yAxisID: 'y',
                     tension: 0.1
                 }, {
                     label: 'Precipitation (mm)',
                     data: precipData,
-                    borderColor: 'rgb(54, 162, 235)',
+                    borderColor: colors.precipitation.border,
+                    backgroundColor: colors.precipitation.background,
                     yAxisID: 'y1',
                     tension: 0.1
                 }]
@@ -1018,18 +1169,31 @@ class LandCareApp {
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Weather Forecast'
+                        text: 'Weather Forecast',
+                        color: textColor
+                    },
+                    legend: {
+                        labels: {
+                            color: textColor
+                        }
                     }
                 },
                 scales: {
+                    x: {
+                        ticks: { color: textColor },
+                        grid: { color: gridColor }
+                    },
                     y: {
                         type: 'linear',
                         display: true,
                         position: 'left',
                         title: {
                             display: true,
-                            text: 'Temperature (°C)'
-                        }
+                            text: 'Temperature (°C)',
+                            color: textColor
+                        },
+                        ticks: { color: textColor },
+                        grid: { color: gridColor }
                     },
                     y1: {
                         type: 'linear',
@@ -1037,8 +1201,10 @@ class LandCareApp {
                         position: 'right',
                         title: {
                             display: true,
-                            text: 'Precipitation (mm)'
+                            text: 'Precipitation (mm)',
+                            color: textColor
                         },
+                        ticks: { color: textColor },
                         grid: {
                             drawOnChartArea: false,
                         },
