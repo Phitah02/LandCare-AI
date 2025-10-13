@@ -1,18 +1,21 @@
-# LandCare AI - Agricultural Analysis Platform
+# LandCare AI - Land Analysis Platform
 
 ## Overview
 
-LandCare AI is a comprehensive web application for  land analysis, enabling users to draw polygons on an interactive map and receive detailed insights including NDVI (Normalized Difference Vegetation Index), land cover classification, risk assessment, historical trends, and weather forecasting using Google Earth Engine (GEE) and OpenWeatherMap APIs.
+LandCare AI is a comprehensive multi-section web application for land analysis, featuring a modern, user-friendly interface with dedicated sections for introduction, features, interactive exploration, future predictions, and calls to action. Users can draw polygons on an interactive map and receive detailed insights including NDVI (Normalized Difference Vegetation Index), land cover classification, risk assessment, historical trends, and weather forecasting using Google Earth Engine (GEE) and OpenWeatherMap APIs.
 
 ### Key Features
-- **Interactive Map**: Draw and edit polygons on a Leaflet-based map with satellite imagery.
+- **Hero Section**: Engaging introduction with title, subtitle, and call-to-action button.
+- **Features Section**: Highlight key capabilities with cards for Vegetation Analysis, Soil Health, and Water Management.
+- **Interactive Explore Area**: Draw and edit polygons on a Leaflet-based map with satellite imagery, integrated with a sidebar for results.
 - **Real-time Analysis**: Instant NDVI, land cover, slope, area calculation, and weather data.
 - **Risk Assessment**: Comprehensive risk scoring based on vegetation, land cover, erosion, and weather factors.
 - **Historical Analysis**: View NDVI and weather trends over the past 10+ years with interactive charts.
-- **Forecasting**: Predict NDVI and weather conditions for up to 24 months ahead.
+- **Future Predictions**: Forecast NDVI and weather conditions for up to 24 months ahead with bar charts.
 - **Location Search**: Search for places by name and automatically create analysis polygons.
 - **Dark/Light Theme**: Toggle between themes for better user experience.
 - **Responsive Design**: Optimized for desktop and mobile devices.
+- **CTA Footer**: Call-to-action section encouraging user engagement.
 
 ### Core Functionality
 - **Interactive Map**: Users draw polygons using Leaflet.js and Leaflet.Draw on the frontend.
@@ -40,10 +43,12 @@ LandCare/
 │   │   └── config.py          # Configuration settings
 │   ├── gee_processor.py       # GEE integration for NDVI and land cover
 │   ├── weather_integration.py # OpenWeatherMap integration
+│   ├── forecasting.py         # Forecasting logic for NDVI and weather
 │   ├── models.py              # Database models and Supabase integration
-│   └── requirements.txt       # Python dependencies
+│   ├── requirements.txt       # Python dependencies
+│   └── .env.example           # Environment variables template
 ├── frontend/
-│   ├── index.html             # Main HTML page
+│   ├── index.html             # Main HTML page with multi-section layout
 │   ├── css/
 │   │   └── style.css          # Styles for the application
 │   ├── js/
@@ -53,6 +58,8 @@ LandCare/
 ├── database/
 │   └── schema.sql             # Supabase database schema
 ├── .env.example               # Environment variables template
+├── test_geometry.json         # Test geometry file
+├── TODO.md                    # Development tasks and progress
 ├── README.md                  # This file
 └── LICENSE
 ```
@@ -133,22 +140,27 @@ LandCare/
 
 ### 4. Usage
 1. Open the app in your browser.
-2. **Theme Toggle**: Click the "🌙 Dark Mode" button in the header to switch between light and dark themes.
-3. **Location Search**: Enter a place name (e.g., "Nairobi, Kenya") in the search box and click "Search Location" to automatically create a polygon around that area.
-4. **Draw Polygon**: Click "Draw Polygon" to start drawing on the map, or use the searched location.
-5. Draw a polygon over an area of interest (e.g., farmland).
-6. Click "Analyze" to process:
-   - NDVI value for vegetation health.
-   - Land cover breakdown (e.g., cropland percentage).
-   - Slope and area calculations.
-   - Current weather at the polygon's center.
-   - Risk assessment with overall score and factor breakdowns.
-7. View results in the bottom panel:
-   - **Statistics Tab**: Basic metrics and overview.
-   - **Risk Analysis Tab**: Detailed risk factors and early warnings.
-   - **Historical Analysis Tab**: Get historical NDVI and weather data (default 10 years).
-   - **Forecasting Tab**: Forecast NDVI and weather (default 6 months).
-8. Use "Clear/Reset" to reset the map and results.
+2. **Hero Section**: Read the introduction and click "Explore Your Area" to scroll to the interactive section.
+3. **Features Section**: Review the key capabilities (Vegetation Analysis, Soil Health, Water Management).
+4. **Theme Toggle**: Click the "🌙 Dark Mode" button in the header to switch between light and dark themes.
+5. **Explore Section**: Use the interactive map and sidebar for analysis.
+   - **Location Search**: Enter a place name (e.g., "Nairobi, Kenya") in the search box and click "Search Location" to automatically create a polygon around that area.
+   - **Draw Polygon**: Click "Draw Polygon" to start drawing on the map, or use the searched location.
+   - Draw a polygon over an area of interest (e.g., farmland).
+   - Click "Analyze" to process:
+     - NDVI value for vegetation health.
+     - Land cover breakdown (e.g., cropland percentage).
+     - Slope and area calculations.
+     - Current weather at the polygon's center.
+     - Risk assessment with overall score and factor breakdowns.
+   - View results in the sidebar:
+     - **Statistics Tab**: Basic metrics and overview.
+     - **Risk Analysis Tab**: Detailed risk factors and early warnings.
+     - **Historical Analysis Tab**: Get historical NDVI and weather data (default 10 years).
+     - **Forecasting Tab**: Forecast NDVI and weather (default 6 months).
+   - Use "Clear/Reset" to reset the map and results.
+6. **Future Section**: View sample bar charts for health trends and risk levels (integrates with analysis results).
+7. **Footer**: Click "Be part of the solution" to return to the explore section.
 
 ### 5. Testing
 - **Basic Map**: Ensure the map loads with base layers.
