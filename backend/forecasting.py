@@ -12,9 +12,20 @@ def forecast_ndvi(historical_ndvi, periods=12):
     periods: number of months to forecast
     """
     try:
-        # Convert to pandas Series
-        dates = pd.to_datetime(historical_ndvi['dates'])
-        values = pd.Series(historical_ndvi['values'], index=dates)
+        # Filter out invalid values
+        valid_data = [(d, v) for d, v in zip(historical_ndvi['dates'], historical_ndvi['values']) if v is not None and str(v).lower() != 'nan']
+
+        if len(valid_data) == 0:
+            return {'error': 'No valid historical NDVI data available for forecasting'}
+
+        dates, values = zip(*valid_data)
+        dates = pd.to_datetime(dates)
+        values = pd.Series(values, index=dates)
+
+        # Ensure numeric and clean
+        values = pd.to_numeric(values, errors='coerce').dropna()
+        if len(values) == 0:
+            return {'error': 'No valid historical NDVI data available for forecasting'}
 
         # Fit ARIMA model (p,d,q) - simple (1,1,1)
         model = ARIMA(values, order=(1,1,1))
@@ -37,11 +48,27 @@ def forecast_weather(historical_weather, variable='temperature', periods=12):
     """
     Forecast weather variable using ARIMA.
     historical_weather: dict with 'dates', 'temperature', 'rainfall' lists
-    variable: 'temperature' or 'rainfall'
+    variable: 'temperature', 'rainfall', or 'precipitation' (alias for rainfall)
     """
     try:
-        dates = pd.to_datetime(historical_weather['dates'])
-        values = pd.Series(historical_weather[variable], index=dates)
+        # Handle precipitation as alias for rainfall
+        if variable == 'precipitation':
+            variable = 'rainfall'
+
+        # Filter out invalid values
+        valid_data = [(d, v) for d, v in zip(historical_weather['dates'], historical_weather[variable]) if v is not None and str(v).lower() != 'nan']
+
+        if len(valid_data) == 0:
+            return {'error': f'No valid historical {variable} data available for forecasting'}
+
+        dates, values = zip(*valid_data)
+        dates = pd.to_datetime(dates)
+        values = pd.Series(values, index=dates)
+
+        # Ensure numeric and clean
+        values = pd.to_numeric(values, errors='coerce').dropna()
+        if len(values) == 0:
+            return {'error': f'No valid historical {variable} data available for forecasting'}
 
         # Fit ARIMA
         model = ARIMA(values, order=(1,1,1))
