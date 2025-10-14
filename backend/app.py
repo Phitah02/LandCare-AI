@@ -7,6 +7,7 @@ from forecasting import forecast_ndvi, forecast_weather
 from models import db
 import json
 import requests
+import pandas as pd
 
 app = Flask(__name__)
 CORS(app)
@@ -220,7 +221,32 @@ def forecast_weather_endpoint(lat, lon):
         months = int(request.args.get('months', 6))
         user_id = request.args.get('user_id', 'anonymous')
 
-        forecast_data = forecast_weather(lat, lon, months)
+        # First get historical weather data for forecasting
+        historical_data = get_historical_weather(lat, lon, years=5)
+
+        if 'error' in historical_data:
+            return jsonify({'error': f"Failed to get historical weather data: {historical_data['error']}"}), 500
+
+        # Forecast temperature
+        temp_forecast = forecast_weather(historical_data, 'temperature', months)
+        if 'error' in temp_forecast:
+            return jsonify({'error': f"Failed to forecast temperature: {temp_forecast['error']}"}), 500
+
+        # Forecast precipitation (rainfall)
+        precip_forecast = forecast_weather(historical_data, 'precipitation', months)
+        if 'error' in precip_forecast:
+            return jsonify({'error': f"Failed to forecast precipitation: {precip_forecast['error']}"}), 500
+
+        # Combine forecasts into the format expected by frontend
+        forecast_data = []
+        for i in range(months):
+            forecast_date = pd.to_datetime(temp_forecast['forecast_dates'][i])
+            month_label = forecast_date.to_pydatetime().strftime('%b %Y')  # e.g., "Jan 2024"
+            forecast_data.append({
+                'month': month_label,
+                'temperature': round(temp_forecast['forecast_values'][i], 1),
+                'precipitation': round(max(0, precip_forecast['forecast_values'][i]), 1)  # Ensure non-negative
+            })
 
         # Save to database (using geometry as None for weather forecasts)
         try:
