@@ -113,35 +113,7 @@ class LandCareApp {
             });
         }
 
-        // Historical Analysis buttons
-        const getHistoricalNDVI = document.getElementById('get-historical-ndvi');
-        if (getHistoricalNDVI) {
-            getHistoricalNDVI.addEventListener('click', () => {
-                this.getHistoricalNDVI();
-            });
-        }
-
-        const getHistoricalWeather = document.getElementById('get-historical-weather');
-        if (getHistoricalWeather) {
-            getHistoricalWeather.addEventListener('click', () => {
-                this.getHistoricalWeather();
-            });
-        }
-
-        // Forecasting buttons
-        const forecastNDVI = document.getElementById('forecast-ndvi');
-        if (forecastNDVI) {
-            forecastNDVI.addEventListener('click', () => {
-                this.forecastNDVI();
-            });
-        }
-
-        const forecastWeather = document.getElementById('forecast-weather');
-        if (forecastWeather) {
-            forecastWeather.addEventListener('click', () => {
-                this.forecastWeather();
-            });
-        }
+        // Historical and Forecasting buttons will be attached after tabs are created
 
         // Theme toggle button
         const themeToggle = document.getElementById('theme-toggle');
@@ -268,6 +240,9 @@ class LandCareApp {
             tabContentContainer.appendChild(forecastTabContent);
         }
 
+        // Attach event listeners for the dynamic buttons
+        this.attachHistoricalForecastListeners();
+
         // Re-attach event listeners for new tabs
         this.initTabs();
     }
@@ -280,6 +255,43 @@ class LandCareApp {
         // Add active class to selected tab and button
         document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
         document.getElementById(`${tabName}-tab`).classList.add('active');
+
+        // Re-attach listeners if needed (in case tabs are switched after dynamic creation)
+        if (tabName === 'historical' || tabName === 'forecasting') {
+            this.attachHistoricalForecastListeners();
+        }
+    }
+
+    attachHistoricalForecastListeners() {
+        // Historical Analysis buttons
+        const getHistoricalNDVI = document.getElementById('get-historical-ndvi');
+        if (getHistoricalNDVI) {
+            getHistoricalNDVI.addEventListener('click', () => {
+                this.getHistoricalNDVI();
+            });
+        }
+
+        const getHistoricalWeather = document.getElementById('get-historical-weather');
+        if (getHistoricalWeather) {
+            getHistoricalWeather.addEventListener('click', () => {
+                this.getHistoricalWeather();
+            });
+        }
+
+        // Forecasting buttons
+        const forecastNDVI = document.getElementById('forecast-ndvi');
+        if (forecastNDVI) {
+            forecastNDVI.addEventListener('click', () => {
+                this.forecastNDVI();
+            });
+        }
+
+        const forecastWeather = document.getElementById('forecast-weather');
+        if (forecastWeather) {
+            forecastWeather.addEventListener('click', () => {
+                this.forecastWeather();
+            });
+        }
     }
 
     async analyzePolygon() {
@@ -919,18 +931,130 @@ class LandCareApp {
         const theme = document.documentElement.getAttribute('data-theme') || 'light';
         if (theme === 'dark') {
             return {
-                ndvi: { border: 'rgb(100, 255, 255)', background: 'rgba(100, 255, 255, 0.2)' },
-                temperature: { border: 'rgb(255, 150, 150)', background: 'rgba(255, 150, 150, 0.2)' },
-                precipitation: { border: 'rgb(150, 200, 255)', background: 'rgba(150, 200, 255, 0.2)' },
-                forecastNdvi: { border: 'rgb(255, 200, 100)', background: 'rgba(255, 200, 100, 0.2)' }
+                ndvi: {
+                    border: 'rgb(0, 255, 127)',
+                    background: 'linear-gradient(135deg, rgba(0, 255, 127, 0.3), rgba(0, 255, 127, 0.1))',
+                    pointBackground: 'rgb(0, 255, 127)',
+                    pointBorder: 'rgb(0, 255, 127)'
+                },
+                temperature: {
+                    border: 'rgb(255, 69, 0)',
+                    background: 'linear-gradient(135deg, rgba(255, 69, 0, 0.3), rgba(255, 69, 0, 0.1))',
+                    pointBackground: 'rgb(255, 69, 0)',
+                    pointBorder: 'rgb(255, 69, 0)'
+                },
+                precipitation: {
+                    border: 'rgb(30, 144, 255)',
+                    background: 'linear-gradient(135deg, rgba(30, 144, 255, 0.3), rgba(30, 144, 255, 0.1))',
+                    pointBackground: 'rgb(30, 144, 255)',
+                    pointBorder: 'rgb(30, 144, 255)'
+                },
+                forecastNdvi: {
+                    border: 'rgb(255, 215, 0)',
+                    background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(255, 215, 0, 0.1))',
+                    pointBackground: 'rgb(255, 215, 0)',
+                    pointBorder: 'rgb(255, 215, 0)'
+                },
+                humidity: {
+                    border: 'rgb(138, 43, 226)',
+                    background: 'linear-gradient(135deg, rgba(138, 43, 226, 0.3), rgba(138, 43, 226, 0.1))',
+                    pointBackground: 'rgb(138, 43, 226)',
+                    pointBorder: 'rgb(138, 43, 226)'
+                }
             };
         } else {
             return {
-                ndvi: { border: 'rgb(75, 192, 192)', background: 'rgba(75, 192, 192, 0.2)' },
-                temperature: { border: 'rgb(255, 99, 132)', background: 'rgba(255, 99, 132, 0.2)' },
-                precipitation: { border: 'rgb(54, 162, 235)', background: 'rgba(54, 162, 235, 0.2)' },
-                forecastNdvi: { border: 'rgb(255, 159, 64)', background: 'rgba(255, 159, 64, 0.2)' }
+                ndvi: {
+                    border: 'rgb(34, 139, 34)',
+                    background: 'linear-gradient(135deg, rgba(34, 139, 34, 0.4), rgba(34, 139, 34, 0.1))',
+                    pointBackground: 'rgb(34, 139, 34)',
+                    pointBorder: 'rgb(34, 139, 34)'
+                },
+                temperature: {
+                    border: 'rgb(220, 20, 60)',
+                    background: 'linear-gradient(135deg, rgba(220, 20, 60, 0.4), rgba(220, 20, 60, 0.1))',
+                    pointBackground: 'rgb(220, 20, 60)',
+                    pointBorder: 'rgb(220, 20, 60)'
+                },
+                precipitation: {
+                    border: 'rgb(25, 25, 112)',
+                    background: 'linear-gradient(135deg, rgba(25, 25, 112, 0.4), rgba(25, 25, 112, 0.1))',
+                    pointBackground: 'rgb(25, 25, 112)',
+                    pointBorder: 'rgb(25, 25, 112)'
+                },
+                forecastNdvi: {
+                    border: 'rgb(255, 140, 0)',
+                    background: 'linear-gradient(135deg, rgba(255, 140, 0, 0.4), rgba(255, 140, 0, 0.1))',
+                    pointBackground: 'rgb(255, 140, 0)',
+                    pointBorder: 'rgb(255, 140, 0)'
+                },
+                humidity: {
+                    border: 'rgb(75, 0, 130)',
+                    background: 'linear-gradient(135deg, rgba(75, 0, 130, 0.4), rgba(75, 0, 130, 0.1))',
+                    pointBackground: 'rgb(75, 0, 130)',
+                    pointBorder: 'rgb(75, 0, 130)'
+                }
             };
+        }
+    }
+
+    // Generate sample data for demonstration
+    generateSampleData(type) {
+        const now = new Date();
+        const data = [];
+
+        switch(type) {
+            case 'historical-ndvi':
+                for (let i = 120; i >= 0; i--) {
+                    const date = new Date(now.getTime() - i * 30 * 24 * 60 * 60 * 1000);
+                    data.push({
+                        date: date.toISOString().split('T')[0],
+                        value: Math.max(0, Math.min(1, 0.3 + 0.4 * Math.sin(i * 0.1) + Math.random() * 0.2))
+                    });
+                }
+                return {
+                    dates: data.map(d => d.date),
+                    ndvi_values: data.map(d => d.value)
+                };
+
+            case 'historical-weather':
+                for (let i = 120; i >= 0; i--) {
+                    const date = new Date(now.getTime() - i * 30 * 24 * 60 * 60 * 1000);
+                    data.push({
+                        date: date.toISOString().split('T')[0],
+                        temperature: 20 + 10 * Math.sin(i * 0.1) + Math.random() * 5,
+                        rainfall: Math.max(0, 50 + 30 * Math.sin(i * 0.15) + Math.random() * 20)
+                    });
+                }
+                return {
+                    dates: data.map(d => d.date),
+                    temperature: data.map(d => d.temperature),
+                    rainfall: data.map(d => d.rainfall)
+                };
+
+            case 'forecast-ndvi':
+                for (let i = 0; i < 12; i++) {
+                    const futureDate = new Date(now.getTime() + i * 30 * 24 * 60 * 60 * 1000);
+                    data.push({
+                        month: futureDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+                        ndvi: Math.max(0, Math.min(1, 0.4 + 0.3 * Math.sin(i * 0.5) + Math.random() * 0.15))
+                    });
+                }
+                return data;
+
+            case 'forecast-weather':
+                for (let i = 0; i < 12; i++) {
+                    const futureDate = new Date(now.getTime() + i * 30 * 24 * 60 * 60 * 1000);
+                    data.push({
+                        month: futureDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+                        temperature: 22 + 8 * Math.sin(i * 0.5) + Math.random() * 3,
+                        precipitation: Math.max(0, 40 + 25 * Math.sin(i * 0.6) + Math.random() * 15)
+                    });
+                }
+                return data;
+
+            default:
+                return null;
         }
     }
 
@@ -1096,7 +1220,13 @@ class LandCareApp {
                     data: ndviValues,
                     borderColor: colors.forecastNdvi.border,
                     backgroundColor: colors.forecastNdvi.background,
-                    tension: 0.1
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: colors.forecastNdvi.pointBackground,
+                    pointBorderColor: colors.forecastNdvi.pointBorder,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
                 }]
             },
             options: {
@@ -1105,25 +1235,49 @@ class LandCareApp {
                     title: {
                         display: true,
                         text: 'NDVI Forecast',
-                        color: textColor
+                        color: textColor,
+                        font: {
+                            size: 16,
+                            weight: 'bold'
+                        }
                     },
                     legend: {
                         labels: {
-                            color: textColor
+                            color: textColor,
+                            font: {
+                                size: 12
+                            }
                         }
                     }
                 },
                 scales: {
                     x: {
-                        ticks: { color: textColor },
+                        ticks: {
+                            color: textColor,
+                            font: {
+                                size: 11
+                            }
+                        },
                         grid: { color: gridColor }
                     },
                     y: {
                         beginAtZero: true,
                         max: 1,
-                        ticks: { color: textColor },
+                        ticks: {
+                            color: textColor,
+                            font: {
+                                size: 11
+                            },
+                            callback: function(value) {
+                                return value.toFixed(2);
+                            }
+                        },
                         grid: { color: gridColor }
                     }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
                 }
             }
         });
