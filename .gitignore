@@ -1,0 +1,47 @@
+# Sensitive and Environment-Specific Files
+.env
+.env*
+backend/ee-daudipeterkamau-14e6262536e5.json
+
+# Virtual Environments
+.venv/
+venv/
+
+# Temporary and Test Files
+backend/temp.json
+test_geometry.json
+
+# Python-Specific Ignores
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# IDE and Editor Files
+.vscode/
+.idea/
+
+# Operating System Files
+Thumbs.db
+.DS_Store
+*.swp
+*.swo
+
+# Logs and Cache
+*.log
+.cache/
+
+# Database Files
+*.db
+*.sqlite
+*.sqlite3
+
+# Build and Distribution
+dist/
+build/
+
+# Other Potential Ignores
+node_modules/
+.coverage
+htmlcov/
