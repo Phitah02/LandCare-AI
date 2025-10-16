@@ -203,6 +203,9 @@ def forecast_ndvi_endpoint():
 
         forecast_data = forecast_ndvi(historical_ndvi, months)
 
+        if 'error' in forecast_data:
+            return jsonify({'error': forecast_data['error']}), 500
+
         # Save to database
         try:
             db.save_forecast(user_id, geometry, forecast_data)
