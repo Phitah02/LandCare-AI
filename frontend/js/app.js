@@ -1062,6 +1062,11 @@ class LandCareApp {
         const canvas = document.getElementById('ndvi-chart');
         if (!canvas) return;
 
+        // Destroy existing chart if it exists
+        if (canvas.chart) {
+            canvas.chart.destroy();
+        }
+
         const ctx = canvas.getContext('2d');
         const dates = data.dates || [];
         const ndviValues = data.ndvi_values || [];
@@ -1070,7 +1075,7 @@ class LandCareApp {
         const textColor = theme === 'dark' ? '#ffffff' : '#000000';
         const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
 
-        new Chart(ctx, {
+        canvas.chart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: dates,
@@ -1117,6 +1122,11 @@ class LandCareApp {
         const canvas = document.getElementById('weather-chart');
         if (!canvas) return;
 
+        // Destroy existing chart if it exists
+        if (canvas.chart) {
+            canvas.chart.destroy();
+        }
+
         const ctx = canvas.getContext('2d');
         const dates = data.dates || [];
         const tempData = data.temperature || [];
@@ -1126,7 +1136,7 @@ class LandCareApp {
         const textColor = theme === 'dark' ? '#ffffff' : '#000000';
         const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
 
-        new Chart(ctx, {
+        canvas.chart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: dates,
@@ -1201,6 +1211,11 @@ class LandCareApp {
         const canvas = document.getElementById('ndvi-forecast-chart');
         if (!canvas) return;
 
+        // Destroy existing chart if it exists
+        if (canvas.chart) {
+            canvas.chart.destroy();
+        }
+
         const ctx = canvas.getContext('2d');
         const months = data.map(item => item.month);
         const ndviValues = data.map(item => item.ndvi);
@@ -1211,7 +1226,7 @@ class LandCareApp {
 
         ctx.canvas.style.backgroundColor = theme === 'dark' ? '#2a2a2a' : '#ffffff';
 
-        new Chart(ctx, {
+        canvas.chart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: months,
@@ -1287,6 +1302,11 @@ class LandCareApp {
         const canvas = document.getElementById('weather-forecast-chart');
         if (!canvas) return;
 
+        // Destroy existing chart if it exists
+        if (canvas.chart) {
+            canvas.chart.destroy();
+        }
+
         const ctx = canvas.getContext('2d');
         const months = data.map(item => item.month);
         const tempData = data.map(item => item.temperature);
@@ -1298,7 +1318,7 @@ class LandCareApp {
 
         ctx.canvas.style.backgroundColor = theme === 'dark' ? '#2a2a2a' : '#ffffff';
 
-        new Chart(ctx, {
+        canvas.chart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: months,
