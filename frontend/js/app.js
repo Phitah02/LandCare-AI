@@ -12,6 +12,7 @@ class LandCareApp {
         this.initTheme();
         this.initEventListeners();
         this.initTabs();
+        this.initFutureCharts();
         this.checkConnectionStatus();
     }
 
@@ -1383,6 +1384,213 @@ class LandCareApp {
                             drawOnChartArea: false,
                         },
                     }
+                }
+            }
+        });
+    }
+
+    // Initialize future section charts with sample data
+    initFutureCharts() {
+        this.initVegetationChart();
+        this.initErosionChart();
+    }
+
+    initVegetationChart() {
+        const canvas = document.getElementById('futureVegetationChart');
+        if (!canvas) return;
+
+        // Destroy existing chart if it exists
+        if (canvas.chart) {
+            canvas.chart.destroy();
+        }
+
+        const ctx = canvas.getContext('2d');
+        const colors = this.getChartColors();
+        const theme = document.documentElement.getAttribute('data-theme') || 'light';
+        const textColor = theme === 'dark' ? '#ffffff' : '#000000';
+        const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
+
+        // Sample data for vegetation health trends over 5 years
+        const years = ['2024', '2025', '2026', '2027', '2028'];
+        const vegetationHealth = [0.65, 0.68, 0.72, 0.69, 0.74]; // NDVI values
+
+        canvas.chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: years,
+                datasets: [{
+                    label: 'Vegetation Health (NDVI)',
+                    data: vegetationHealth,
+                    borderColor: colors.ndvi.border,
+                    backgroundColor: colors.ndvi.background,
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: colors.ndvi.pointBackground,
+                    pointBorderColor: colors.ndvi.pointBorder,
+                    pointRadius: 6,
+                    pointHoverRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Predicted Vegetation Health (5 Years)',
+                        color: textColor,
+                        font: {
+                            size: 16,
+                            weight: 'bold'
+                        }
+                    },
+                    legend: {
+                        labels: {
+                            color: textColor,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: textColor,
+                            font: {
+                                size: 11
+                            }
+                        },
+                        grid: { color: gridColor }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 1,
+                        ticks: {
+                            color: textColor,
+                            font: {
+                                size: 11
+                            },
+                            callback: function(value) {
+                                return value.toFixed(2);
+                            }
+                        },
+                        grid: { color: gridColor },
+                        title: {
+                            display: true,
+                            text: 'NDVI Value',
+                            color: textColor,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+    }
+
+    initErosionChart() {
+        const canvas = document.getElementById('futureErosionChart');
+        if (!canvas) return;
+
+        // Destroy existing chart if it exists
+        if (canvas.chart) {
+            canvas.chart.destroy();
+        }
+
+        const ctx = canvas.getContext('2d');
+        const colors = this.getChartColors();
+        const theme = document.documentElement.getAttribute('data-theme') || 'light';
+        const textColor = theme === 'dark' ? '#ffffff' : '#000000';
+        const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
+
+        // Sample data for erosion risk scenarios
+        const scenarios = ['Current', 'Scenario A', 'Scenario B', 'Scenario C'];
+        const erosionRisk = [45, 52, 38, 61]; // Risk percentages
+
+        canvas.chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: scenarios,
+                datasets: [{
+                    label: 'Erosion Risk (%)',
+                    data: erosionRisk,
+                    backgroundColor: [
+                        colors.temperature.border, // Current - neutral
+                        '#ffc107', // Scenario A - moderate increase
+                        '#4caf50', // Scenario B - decrease
+                        '#f44336'  // Scenario C - high increase
+                    ],
+                    borderColor: [
+                        colors.temperature.border,
+                        '#ffc107',
+                        '#4caf50',
+                        '#f44336'
+                    ],
+                    borderWidth: 2,
+                    borderRadius: 4,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Future Soil Erosion Risk Scenarios',
+                        color: textColor,
+                        font: {
+                            size: 16,
+                            weight: 'bold'
+                        }
+                    },
+                    legend: {
+                        display: false // Hide legend for cleaner look
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: textColor,
+                            font: {
+                                size: 11
+                            }
+                        },
+                        grid: { color: gridColor }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            color: textColor,
+                            font: {
+                                size: 11
+                            },
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        },
+                        grid: { color: gridColor },
+                        title: {
+                            display: true,
+                            text: 'Risk Percentage',
+                            color: textColor,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
                 }
             }
         });

@@ -232,17 +232,34 @@
             </div>
         </section>
 
-        <section id="future" class="future-section">
-            <div class="container">
-                <h2>What does the future hold?</h2>
-                <div class="charts-container">
-                    <div class="chart-item">
-                        <h3>Vegetation Health Trends</h3>
-                        <canvas id="health-trend-chart"></canvas>
+        <section id="future" class="py-16 bg-background-light dark:bg-background-dark">
+            <div class="container mx-auto px-4 text-center">
+                <h2 class="text-4xl font-bold mb-12 text-text-light dark:text-text-dark">What Does the Future Hold?</h2>
+                <p class="text-lg mb-10 text-text-secondary-light dark:text-text-secondary-dark max-w-3xl mx-auto">
+                    Our AI models predict potential environmental changes under different scenarios, helping us prepare and act proactively.
+                </p>
+                <div class="grid md:grid-cols-2 gap-8 items-center">
+                    <div class="bg-surface-light dark:bg-surface-dark p-6 rounded-lg shadow-lg border border-border-light dark:border-border-dark">
+                        <h3 class="text-2xl font-semibold mb-4 text-text-light dark:text-text-dark">Predicted Vegetation Health (5 Years)</h3>
+                        <p class="text-text-secondary-light dark:text-text-secondary-dark mb-4">
+                            How green will our future be? This chart shows projected changes in vegetation density.
+                        </p>
+                        <canvas height="199" id="futureVegetationChart" style="display: block; box-sizing: border-box; height: 199px; width: 299px;" width="299"></canvas>
+                        <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-4 text-left">
+                            <span class="material-symbols-outlined text-base align-middle text-blue-500 mr-1">info</span>
+                            Projection based on current trends and climate models.
+                        </p>
                     </div>
-                    <div class="chart-item">
-                        <h3>Risk Levels Over Time</h3>
-                        <canvas id="risk-level-chart"></canvas>
+                    <div class="bg-surface-light dark:bg-surface-dark p-6 rounded-lg shadow-lg border border-border-light dark:border-border-dark">
+                        <h3 class="text-2xl font-semibold mb-4 text-text-light dark:text-text-dark">Future Soil Erosion Risk (Scenario A)</h3>
+                        <p class="text-text-secondary-light dark:text-text-secondary-dark mb-4">
+                            Understanding potential erosion helps us implement preventative measures.
+                        </p>
+                        <canvas height="199" id="futureErosionChart" width="299" style="display: block; box-sizing: border-box; height: 199px; width: 299px;"></canvas>
+                        <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-4 text-left">
+                            <span class="material-symbols-outlined text-base align-middle text-blue-500 mr-1">info</span>
+                            Scenario A: Moderate rainfall increase with minimal human intervention.
+                        </p>
                     </div>
                 </div>
             </div>
