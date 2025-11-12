@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS users (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -34,15 +35,15 @@ CREATE POLICY "Users can view own profile" ON users
 CREATE POLICY "Users can update own profile" ON users
     FOR UPDATE USING (auth.uid()::text = id);
 
--- Analyses policies (disabled for now since we're using anonymous users)
--- CREATE POLICY "Users can view own analyses" ON analyses
---     FOR SELECT USING (auth.uid()::text = user_id);
+-- Analyses policies - enabled for authenticated users
+CREATE POLICY "Users can view own analyses" ON analyses
+    FOR SELECT USING (auth.uid()::text = user_id);
 
--- CREATE POLICY "Users can insert own analyses" ON analyses
---     FOR INSERT WITH CHECK (auth.uid()::text = user_id);
+CREATE POLICY "Users can insert own analyses" ON analyses
+    FOR INSERT WITH CHECK (auth.uid()::text = user_id);
 
--- CREATE POLICY "Users can update own analyses" ON analyses
---     FOR UPDATE USING (auth.uid()::text = user_id);
+CREATE POLICY "Users can update own analyses" ON analyses
+    FOR UPDATE USING (auth.uid()::text = user_id);
 
--- CREATE POLICY "Users can delete own analyses" ON analyses
---     FOR DELETE USING (auth.uid()::text = user_id);
+CREATE POLICY "Users can delete own analyses" ON analyses
+    FOR DELETE USING (auth.uid()::text = user_id);
