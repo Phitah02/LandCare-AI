@@ -8,12 +8,145 @@ class LandCareApp {
         this.currentPolygon = null;
         this.isAnalyzing = false;
         this.currentResults = null;
+        this.authToken = localStorage.getItem('authToken');
+        this.user = null;
 
         this.initTheme();
         this.initEventListeners();
         this.initTabs();
         this.initFutureCharts();
+        this.initAuth(); // Initialize auth
         this.checkConnectionStatus();
+    }
+
+    async initAuth() {
+        // Check if user is logged in
+        if (this.authToken) {
+            await this.validateToken();
+        } else {
+            this.showAuthSection();
+        }
+    }
+
+    async validateToken() {
+        try {
+            const response = await fetch('http://localhost:5000/auth/me', {
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                this.user = data.user;
+                this.showUserSection();
+            } else {
+                // Token invalid, clear it
+                this.logout();
+            }
+        } catch (error) {
+            console.error('Token validation failed:', error);
+            this.logout();
+        }
+    }
+
+    showAuthSection() {
+        document.getElementById('auth-section').style.display = 'flex';
+        document.getElementById('user-section').style.display = 'none';
+    }
+
+    showUserSection() {
+        document.getElementById('auth-section').style.display = 'none';
+        document.getElementById('user-section').style.display = 'flex';
+        document.getElementById('user-email').textContent = this.user.email;
+    }
+
+    async login(email, password) {
+        try {
+            const response = await fetch('http://localhost:5000/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                this.authToken = data.token;
+                this.user = data.user;
+                localStorage.setItem('authToken', this.authToken);
+                this.showUserSection();
+                this.closeAuthModal();
+                this.showSuccess('Login successful!');
+            } else {
+                throw new Error(data.error || 'Login failed');
+            }
+        } catch (error) {
+            this.showError(error.message);
+        }
+    }
+
+    async register(email, password, confirmPassword) {
+        if (password !== confirmPassword) {
+            this.showError('Passwords do not match');
+            return;
+        }
+
+        try {
+            const response = await fetch('http://localhost:5000/auth/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                this.authToken = data.token;
+                this.user = data.user;
+                localStorage.setItem('authToken', this.authToken);
+                this.showUserSection();
+                this.closeAuthModal();
+                this.showSuccess('Registration successful!');
+            } else {
+                throw new Error(data.error || 'Registration failed');
+            }
+        } catch (error) {
+            this.showError(error.message);
+        }
+    }
+
+    logout() {
+        this.authToken = null;
+        this.user = null;
+        localStorage.removeItem('authToken');
+        this.showAuthSection();
+        this.clearResults();
+        this.showSuccess('Logged out successfully');
+    }
+
+    openAuthModal(login = true) {
+        const modal = document.getElementById('auth-modal');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+
+        modal.style.display = 'block';
+
+        if (login) {
+            loginForm.style.display = 'block';
+            registerForm.style.display = 'none';
+        } else {
+            loginForm.style.display = 'none';
+            registerForm.style.display = 'block';
+        }
+    }
+
+    closeAuthModal() {
+        document.getElementById('auth-modal').style.display = 'none';
     }
 
     initEventListeners() {
@@ -25,7 +158,7 @@ class LandCareApp {
         if (navToggle && navMenu) {
             navToggle.addEventListener('click', () => {
                 navMenu.classList.toggle('active');
-                navToggle.classList.toggle('active');
+                navToggle.classList.remove('active');
             });
         }
 
@@ -61,6 +194,17 @@ class LandCareApp {
         // Update active nav link on scroll
         window.addEventListener('scroll', () => {
             this.updateActiveNavLink();
+        });
+
+        // Auth events
+        document.getElementById('logout-btn').addEventListener('click', () => this.logout());
+
+        // Redirect to login/signup pages
+        document.getElementById('login-btn').addEventListener('click', () => {
+            window.location.href = 'login.html';
+        });
+        document.getElementById('register-btn').addEventListener('click', () => {
+            window.location.href = 'signup.html';
         });
 
         const drawBtn = document.getElementById('draw-polygon');
@@ -127,27 +271,444 @@ class LandCareApp {
         console.log('Event listeners attached');
     }
 
-    initTheme() {
-        // Load saved theme from localStorage or default to light
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        document.documentElement.setAttribute('data-theme', savedTheme);
-        this.updateThemeButton(savedTheme);
+    async analyzePolygon() {
+        // Check if user is authenticated before allowing analysis
+        if (!this.authToken) {
+            this.showError('You must be logged in to perform analysis');
+            this.openAuthModal(true);
+            return;
+        }
+
+        if (!this.mapHandler.currentPolygon) {
+            this.showError('No polygon drawn. Please draw a polygon first.');
+            return;
+        }
+
+        if (this.isAnalyzing) {
+            this.showError('Analysis already in progress...');
+            return;
+        }
+
+        try {
+            this.isAnalyzing = true;
+            const analyzeBtn = document.getElementById('analyze');
+            if (analyzeBtn) {
+                analyzeBtn.disabled = true;
+                analyzeBtn.textContent = 'Analyzing...';
+            }
+            const geometry = this.mapHandler.currentPolygonLayer.toGeoJSON().geometry;
+            const centroid = this.mapHandler.getPolygonCentroid(geometry);
+
+            const response = await fetch('http://localhost:5000/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.authToken}`
+                },
+                body: JSON.stringify({ 
+                    geometry: geometry,
+                    centroid: centroid
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Analysis failed');
+            }
+
+            this.currentResults = data;
+            this.displayResults(data);
+            this.showSuccess('Analysis completed successfully!');
+        } catch (error) {
+            this.showError(`Analysis error: ${error.message}`);
+            console.error('Analysis error:', error);
+        } finally {
+            this.isAnalyzing = false;
+            const analyzeBtn = document.getElementById('analyze');
+            if (analyzeBtn) {
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = 'Analyze';
+            }
+        }
+    }
+
+    displayResults(results) {
+        console.log('Analysis Results:', results);
+
+        // Hide default message and show results
+        const defaultMessage = document.getElementById('default-message');
+        if (defaultMessage) {
+            defaultMessage.style.display = 'none';
+        }
+
+        // Update overview tab statistics
+        if (results.ndvi && results.ndvi.NDVI !== undefined) {
+            const ndviEl = document.getElementById('ndvi-value');
+            if (ndviEl) ndviEl.textContent = results.ndvi.NDVI.toFixed(3);
+        }
+
+        if (results.evi && results.evi.EVI !== undefined) {
+            const eviEl = document.getElementById('evi-value');
+            if (eviEl) eviEl.textContent = results.evi.EVI.toFixed(3);
+        }
+
+        if (results.savi && results.savi.SAVI !== undefined) {
+            const saviEl = document.getElementById('savi-value');
+            if (saviEl) saviEl.textContent = results.savi.SAVI.toFixed(3);
+        }
+
+        // Update area in hectares
+        if (results.area_hectares !== undefined && results.area_hectares !== null) {
+            const areaEl = document.getElementById('area-value');
+            if (areaEl) areaEl.textContent = `${results.area_hectares} ha`;
+        }
+
+        // Update risk tag on polygon
+        if (results.risk_assessment && results.risk_assessment.risk_level) {
+            const riskLevel = results.risk_assessment.risk_level;
+            const riskScore = results.risk_assessment.overall_risk_score;
+            this.mapHandler.updatePolygonRiskTag(riskLevel, riskScore);
+
+            // Polygon color is now updated in map-handler.js updatePolygonRiskTag method
+        }
+
+        // Update detailed land cover types
+        if (results.land_cover && (results.land_cover.land_cover_types || results.land_cover.land_cover_areas)) {
+            this.updateLandCoverDisplay(results.land_cover);
+        }
+
+        if (results.weather && results.weather.main && results.weather.main.temp !== undefined) {
+            const tempEl = document.getElementById('temperature-value');
+            if (tempEl) tempEl.textContent = `${results.weather.main.temp.toFixed(1)}°C`;
+        }
+
+        if (results.weather && results.weather.main && results.weather.main.humidity !== undefined) {
+            const humidityEl = document.getElementById('humidity-value');
+            if (humidityEl) humidityEl.textContent = `${results.weather.main.humidity.toFixed(1)}%`;
+        }
+
+        // Update weather description
+        if (results.weather && results.weather.weather_description) {
+            const weatherDescEl = document.getElementById('weather-description-value');
+            if (weatherDescEl) weatherDescEl.textContent = results.weather.weather_description;
+        }
+
+        // Update risk assessment
+        if (results.risk_assessment) {
+            const riskLevelEl = document.getElementById('risk-level');
+            const riskScoreEl = document.getElementById('risk-score');
+
+            if (results.risk_assessment.overall_risk_score !== undefined) {
+                const score = results.risk_assessment.overall_risk_score;
+                if (riskScoreEl) riskScoreEl.textContent = score.toFixed(2);
+
+                let riskLevel = 'Unknown';
+                if (score >= 0.6) riskLevel = 'High';
+                else if (score >= 0.3) riskLevel = 'Medium';
+                else riskLevel = 'Low';
+
+                if (riskLevelEl) riskLevelEl.textContent = riskLevel;
+
+                // Update risk indicator color
+                const riskIndicator = document.getElementById('risk-indicator');
+                if (riskIndicator) {
+                    riskIndicator.className = `risk-indicator ${riskLevel.toLowerCase()}-risk`;
+                    // Add background color based on risk level
+                    let riskColor = '#28a745'; // Default low risk
+                    if (riskLevel.toLowerCase() === 'high') {
+                        riskColor = '#d32f2f';
+                    } else if (riskLevel.toLowerCase() === 'medium') {
+                        riskColor = '#ffc107';
+                    }
+                    riskIndicator.style.backgroundColor = riskColor;
+                    riskIndicator.style.color = 'white';
+                }
+            }
+
+            // Update risk breakdown if available
+            if (results.risk_assessment.risk_factors) {
+                const riskFactors = results.risk_assessment.risk_factors;
+
+                // Helper function to update risk meter
+                const updateRiskMeter = (riskValue, percentElId, fillElId, levelElId) => {
+                    if (riskValue !== undefined) {
+                        const percentage = riskValue * 100;
+                        const percentEl = document.getElementById(percentElId);
+                        const fillEl = document.getElementById(fillElId);
+                        const levelEl = document.getElementById(levelElId);
+
+                        if (percentEl) percentEl.textContent = `${percentage.toFixed(0)}%`;
+                        if (fillEl) {
+                            fillEl.style.setProperty('--risk-width', `${percentage}%`);
+                            // Remove existing risk classes
+                            fillEl.classList.remove('high-risk', 'medium-risk', 'low-risk');
+                            levelEl.classList.remove('high-risk', 'medium-risk', 'low-risk');
+
+                            // Determine risk level and apply classes
+                            let riskLevel = 'Low Risk';
+                            if (percentage >= 70) {
+                                riskLevel = 'High Risk';
+                                fillEl.classList.add('high-risk');
+                                levelEl.classList.add('high-risk');
+                            } else if (percentage >= 40) {
+                                riskLevel = 'Medium Risk';
+                                fillEl.classList.add('medium-risk');
+                                levelEl.classList.add('medium-risk');
+                            } else {
+                                riskLevel = 'Low Risk';
+                                fillEl.classList.add('low-risk');
+                                levelEl.classList.add('low-risk');
+                            }
+
+                            if (levelEl) levelEl.textContent = riskLevel;
+                        }
+                    }
+                };
+
+                updateRiskMeter(riskFactors.vegetation_risk, 'vegetation-risk-percent', 'vegetation-risk-fill', 'vegetation-risk-level');
+                updateRiskMeter(riskFactors.land_cover_risk, 'landcover-risk-percent', 'landcover-risk-fill', 'landcover-risk-level');
+                updateRiskMeter(riskFactors.erosion_risk, 'erosion-risk-percent', 'erosion-risk-fill', 'erosion-risk-level');
+                updateRiskMeter(riskFactors.weather_risk, 'weather-risk-percent', 'weather-risk-fill', 'weather-risk-level');
+            }
+
+            // Update early warnings if available
+            if (results.risk_assessment.recommendations) {
+                this.updateEarlyWarnings(results.risk_assessment.recommendations);
+            } else {
+                // Generate early warnings based on statistics and risk analysis
+                this.generateEarlyWarnings(results);
+            }
+        }
+
+        // Update land cover summary (legacy support)
+        if (results.land_cover && results.land_cover.Map && !results.land_cover.land_cover_types) {
+            const landCoverEl = document.getElementById('land-cover-summary');
+            if (landCoverEl) {
+                // Find the most common land cover type
+                const types = Object.keys(results.land_cover.Map);
+                if (types.length > 0) {
+                    const primaryType = types.reduce((a, b) =>
+                        results.land_cover.Map[a] > results.land_cover.Map[b] ? a : b
+                    );
+                    landCoverEl.textContent = primaryType.replace(/_/g, ' ').toUpperCase();
+                }
+            }
+        }
+
+        // Update slope if available
+        if (results.slope && results.slope.slope_mean !== undefined) {
+            const slopeEl = document.getElementById('slope-value');
+            if (slopeEl) slopeEl.textContent = `${results.slope.slope_mean.toFixed(1)}°`;
+        }
+
+        // Show results panel
+        const resultsPanel = document.getElementById('results-panel');
+        if (resultsPanel) {
+            resultsPanel.style.display = 'block';
+        }
+    }
+
+    clearResults() {
+        this.currentResults = null;
+
+        // Reset all result elements to default values
+        const elementsToReset = [
+            'ndvi-value', 'evi-value', 'savi-value', 'area-value',
+            'land-cover-summary', 'slope-value', 'temperature-value', 'humidity-value',
+            'weather-description-value', 'risk-level', 'risk-score'
+        ];
+
+        elementsToReset.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '-';
+        });
+
+        // Clear land cover details
+        const landCoverDetailsEl = document.getElementById('land-cover-details');
+        if (landCoverDetailsEl) {
+            landCoverDetailsEl.innerHTML = '';
+        }
+
+        // Clear early warnings
+        const earlyWarningsEl = document.getElementById('early-warnings-list');
+        if (earlyWarningsEl) {
+            earlyWarningsEl.innerHTML = '';
+        }
+
+        // Reset risk meters
+        const riskFills = [
+            'vegetation-risk-fill', 'landcover-risk-fill', 'erosion-risk-fill', 'weather-risk-fill'
+        ];
+
+        riskFills.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.setProperty('--risk-width', '0%');
+                el.classList.remove('high-risk', 'medium-risk', 'low-risk');
+            }
+        });
+
+        const riskPercents = [
+            'vegetation-risk-percent', 'landcover-risk-percent', 'erosion-risk-percent', 'weather-risk-percent'
+        ];
+
+        riskPercents.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '-';
+        });
+
+        const riskLevels = [
+            'vegetation-risk-level', 'landcover-risk-level', 'erosion-risk-level', 'weather-risk-level'
+        ];
+
+        riskLevels.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = '-';
+                el.classList.remove('high-risk', 'medium-risk', 'low-risk');
+            }
+        });
+
+        // Reset risk indicator
+        const riskIndicator = document.getElementById('risk-indicator');
+        if (riskIndicator) {
+            riskIndicator.className = 'risk-indicator';
+        }
+
+        // Clear polygon risk tag
+        this.mapHandler.clearPolygonRiskTag();
+
+        // Show default message and hide results panel
+        const defaultMessage = document.getElementById('default-message');
+        if (defaultMessage) {
+            defaultMessage.style.display = 'block';
+        }
+
+        const resultsPanel = document.getElementById('results-panel');
+        if (resultsPanel) {
+            resultsPanel.style.display = 'none';
+        }
+    }
+
+    async searchLocation() {
+        const roiInput = document.getElementById('roi-input');
+        const placeName = roiInput.value.trim();
+
+        if (!placeName) {
+            this.showError('Please enter a location name');
+            return;
+        }
+
+        try {
+            const response = await fetch('http://localhost:5000/geocode', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ place_name: placeName })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Geocoding failed');
+            }
+
+            // Center map on the found location
+            this.mapHandler.map.setView([data.lat, data.lon], 10);
+            this.showSuccess(`Found: ${data.display_name}`);
+        } catch (error) {
+            this.showError(`Search error: ${error.message}`);
+            console.error('Geocoding error:', error);
+        }
     }
 
     toggleTheme() {
-        const currentTheme = document.documentElement.getAttribute('data-theme');
-        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        const htmlElement = document.documentElement;
+        const isDark = htmlElement.getAttribute('data-theme') === 'dark';
         
-        document.documentElement.setAttribute('data-theme', newTheme);
+        const newTheme = isDark ? 'light' : 'dark';
+        htmlElement.setAttribute('data-theme', newTheme);
+        
+        // Save preference
         localStorage.setItem('theme', newTheme);
-        this.updateThemeButton(newTheme);
-    }
-
-    updateThemeButton(theme) {
+        
+        // Update button text/icon
         const themeToggle = document.getElementById('theme-toggle');
         if (themeToggle) {
-            themeToggle.textContent = theme === 'light' ? '🌙 Dark' : '☀️ Light';
+            themeToggle.textContent = newTheme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
         }
+    }
+
+    initTheme() {
+        // Load saved theme preference or use system preference
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = savedTheme || (prefersDark ? 'dark' : 'light');
+        
+        document.documentElement.setAttribute('data-theme', theme);
+        
+        const themeToggle = document.getElementById('theme-toggle');
+        if (themeToggle) {
+            themeToggle.textContent = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+        }
+    }
+
+    initTabs() {
+        // Initialize tabs functionality - will be enhanced based on your HTML structure
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        tabButtons.forEach((button, index) => {
+            button.addEventListener('click', () => {
+                // Hide all tabs
+                tabContents.forEach(content => {
+                    content.style.display = 'none';
+                });
+
+                // Remove active class from all buttons
+                tabButtons.forEach(btn => {
+                    btn.classList.remove('active');
+                });
+
+                // Show selected tab and mark button as active
+                if (tabContents[index]) {
+                    tabContents[index].style.display = 'block';
+                }
+                button.classList.add('active');
+            });
+        });
+
+        // Show first tab by default
+        if (tabButtons.length > 0) {
+            tabButtons[0].classList.add('active');
+            if (tabContents.length > 0) {
+                tabContents[0].style.display = 'block';
+            }
+        }
+    }
+
+    initFutureCharts() {
+        // Placeholder for future chart initialization
+        // Will be called when forecasting data is available
+        console.log('Future charts initialized');
+    }
+
+    checkConnectionStatus() {
+        // Check backend connectivity
+        fetch('http://localhost:5000/health')
+            .then(response => response.json())
+            .then(data => {
+                console.log('Backend health:', data);
+                if (data.gee_initialized) {
+                    console.log('GEE is initialized');
+                }
+            })
+            .catch(error => {
+                console.error('Backend connection error:', error);
+                this.showError('Cannot connect to backend. Please ensure the server is running.');
+            });
     }
 
     updateActiveNavLink() {
@@ -155,11 +716,9 @@ class LandCareApp {
         const navLinks = document.querySelectorAll('.nav-menu a');
 
         let currentSection = '';
-
         sections.forEach(section => {
             const sectionTop = section.offsetTop;
-            const sectionHeight = section.clientHeight;
-            if (window.pageYOffset >= sectionTop - sectionHeight / 3) {
+            if (window.scrollY >= sectionTop - 60) {
                 currentSection = section.getAttribute('id');
             }
         });
@@ -172,1430 +731,250 @@ class LandCareApp {
         });
     }
 
-    initTabs() {
-        const tabButtons = document.querySelectorAll('.tab-button');
-        tabButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                const tabName = button.getAttribute('data-tab');
-                this.switchTab(tabName);
-            });
-        });
-
-        // Add new tabs dynamically if not present
-        this.addNewTabs();
-    }
-
-    addNewTabs() {
-        const tabsContainer = document.querySelector('#results-tabs');
-        const tabContentContainer = document.querySelector('#results-content');
-
-        if (!tabsContainer || !tabContentContainer) return;
-
-        // Historical Analysis Tab
-        if (!document.querySelector('[data-tab="historical"]')) {
-            const historicalTabBtn = document.createElement('button');
-            historicalTabBtn.className = 'tab-button';
-            historicalTabBtn.setAttribute('data-tab', 'historical');
-            historicalTabBtn.textContent = 'Historical Analysis';
-            tabsContainer.appendChild(historicalTabBtn);
-
-            const historicalTabContent = document.createElement('div');
-            historicalTabContent.id = 'historical-tab';
-            historicalTabContent.className = 'tab-content';
-            historicalTabContent.innerHTML = `
-                <div class="historical-controls">
-                    <button id="get-historical-ndvi">Get Historical NDVI</button>
-                    <button id="get-historical-weather">Get Historical Weather</button>
-                    <input type="number" id="historical-years" placeholder="Years (default: 10)" min="1" max="20">
-                </div>
-                <div id="historical-charts">
-                    <canvas id="ndvi-chart" width="400" height="200"></canvas>
-                    <canvas id="weather-chart" width="400" height="200"></canvas>
-                </div>
-            `;
-            tabContentContainer.appendChild(historicalTabContent);
-        }
-
-        // Forecasting Tab
-        if (!document.querySelector('[data-tab="forecasting"]')) {
-            const forecastTabBtn = document.createElement('button');
-            forecastTabBtn.className = 'tab-button';
-            forecastTabBtn.setAttribute('data-tab', 'forecasting');
-            forecastTabBtn.textContent = 'Forecasting';
-            tabsContainer.appendChild(forecastTabBtn);
-
-            const forecastTabContent = document.createElement('div');
-            forecastTabContent.id = 'forecasting-tab';
-            forecastTabContent.className = 'tab-content';
-            forecastTabContent.innerHTML = `
-                <div class="forecast-controls">
-                    <button id="forecast-ndvi">Forecast NDVI</button>
-                    <button id="forecast-weather">Forecast Weather</button>
-                    <input type="number" id="forecast-months" placeholder="Months (default: 6)" min="1" max="24">
-                </div>
-                <div id="forecast-charts">
-                    <canvas id="ndvi-forecast-chart" width="400" height="200"></canvas>
-                    <canvas id="weather-forecast-chart" width="400" height="200"></canvas>
-                </div>
-            `;
-            tabContentContainer.appendChild(forecastTabContent);
-        }
-
-        // Attach event listeners for the dynamic buttons
-        this.attachHistoricalForecastListeners();
-
-        // Re-attach event listeners for new tabs
-        this.initTabs();
-    }
-
-    switchTab(tabName) {
-        // Remove active class from all tabs and buttons
-        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    showSuccess(message) {
+        // Show success toast/notification
+        console.log('Success:', message);
+        // You can implement a toast notification here
+        const notification = document.createElement('div');
+        notification.className = 'notification success';
+        notification.textContent = message;
+        document.body.appendChild(notification);
         
-        // Add active class to selected tab and button
-        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-        document.getElementById(`${tabName}-tab`).classList.add('active');
-
-        // Re-attach listeners if needed (in case tabs are switched after dynamic creation)
-        if (tabName === 'historical' || tabName === 'forecasting') {
-            this.attachHistoricalForecastListeners();
-        }
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
     }
 
-    attachHistoricalForecastListeners() {
-        // Historical Analysis buttons
-        const getHistoricalNDVI = document.getElementById('get-historical-ndvi');
-        if (getHistoricalNDVI) {
-            getHistoricalNDVI.addEventListener('click', () => {
-                this.getHistoricalNDVI();
-            });
-        }
+    updateLandCoverDisplay(landCoverData) {
+        const landCoverDetailsEl = document.getElementById('land-cover-details');
+        if (!landCoverDetailsEl) return;
 
-        const getHistoricalWeather = document.getElementById('get-historical-weather');
-        if (getHistoricalWeather) {
-            getHistoricalWeather.addEventListener('click', () => {
-                this.getHistoricalWeather();
-            });
-        }
+        // Clear existing content
+        landCoverDetailsEl.innerHTML = '';
 
-        // Forecasting buttons
-        const forecastNDVI = document.getElementById('forecast-ndvi');
-        if (forecastNDVI) {
-            forecastNDVI.addEventListener('click', () => {
-                this.forecastNDVI();
-            });
-        }
+        // Mapping of technical names to user-friendly display names
+        const landCoverTypeNames = {
+            'bare_ground': 'Bare / sparse vegetation',
+            'bare_soil': 'Bare / sparse vegetation',
+            'trees': 'Tree cover',
+            'grass': 'Grassland',
+            'crops': 'Cropland',
+            'water': 'Water',
+            'urban': 'Built-up',
+            'shrub': 'Shrubland',
+            'wetland': 'Wetland',
+            'snow': 'Snow/Ice',
+            'built': 'Built-up',
+            'vegetation': 'Vegetation',
+            'agriculture': 'Agriculture',
+            'forest': 'Tree cover',
+            'woodland': 'Tree cover'
+        };
 
-        const forecastWeather = document.getElementById('forecast-weather');
-        if (forecastWeather) {
-            forecastWeather.addEventListener('click', () => {
-                this.forecastWeather();
-            });
-        }
+        // Check if we have the new km² format or old pixel format
+        let landCoverTypes = landCoverData.land_cover_areas || landCoverData.land_cover_types;
+
+        if (!landCoverTypes) return;
+
+        // Sort by pixel count (descending) - handle both formats
+        const sortedTypes = Object.entries(landCoverTypes)
+            .sort(([,a], [,b]) => {
+                // Handle new format (object with pixel_count) vs old format (number)
+                const aValue = typeof a === 'object' ? a.pixel_count : a;
+                const bValue = typeof b === 'object' ? b.pixel_count : b;
+                return bValue - aValue;
+            })
+            .slice(0, 5); // Show top 5 types
+
+        sortedTypes.forEach(([type, data]) => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'land-cover-item';
+
+            const typeSpan = document.createElement('span');
+            typeSpan.className = 'land-cover-type';
+            typeSpan.textContent = landCoverTypeNames[type] || type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+            const valueSpan = document.createElement('span');
+            valueSpan.className = 'land-cover-value';
+
+            // Handle new km² format vs old pixel format
+            if (typeof data === 'object' && data.area_km2 !== undefined) {
+                // New format: show pixel count as requested
+                valueSpan.textContent = data.pixel_count.toLocaleString();
+                valueSpan.title = `Area: ${data.area_km2.toFixed(2)} km² (${data.percentage.toFixed(1)}% of total area)\nPixel count: ${data.pixel_count.toLocaleString()}`;
+            } else {
+                // Old format: show pixel count
+                valueSpan.textContent = data.toLocaleString();
+                valueSpan.title = 'Pixel count';
+            }
+
+            // Add info icon for tooltip
+            const infoIcon = document.createElement('span');
+            infoIcon.className = 'info-icon';
+            infoIcon.textContent = 'ℹ️';
+            infoIcon.title = 'Area calculated from 10m resolution satellite imagery\n1 pixel = 100 m² = 0.0001 km²';
+
+            itemDiv.appendChild(typeSpan);
+            itemDiv.appendChild(valueSpan);
+            itemDiv.appendChild(infoIcon);
+            landCoverDetailsEl.appendChild(itemDiv);
+        });
     }
 
-    async analyzePolygon() {
-        if (this.isAnalyzing) return;
+    updateEarlyWarnings(recommendations) {
+        const earlyWarningsEl = document.getElementById('early-warnings-list');
+        if (!earlyWarningsEl) return;
 
-        const polygon = this.mapHandler.getCurrentPolygon();
-        if (!polygon) {
-            this.showError('Please draw a polygon first.');
+        // Clear existing content
+        earlyWarningsEl.innerHTML = '';
+
+        if (!recommendations || recommendations.length === 0) {
+            const noWarningsDiv = document.createElement('div');
+            noWarningsDiv.className = 'no-warnings';
+            noWarningsDiv.textContent = 'No early warnings at this time';
+            earlyWarningsEl.appendChild(noWarningsDiv);
             return;
         }
 
-        this.isAnalyzing = true;
-        this.setAnalyzingState(true);
-        this.updateStatus('connecting', 'Analyzing...');
-        this.showLoading('Analyzing polygon...');
+        recommendations.forEach(recommendation => {
+            const warningDiv = document.createElement('div');
+            warningDiv.className = 'early-warning-item';
 
-        try {
-            const geometry = {
-                type: 'Polygon',
-                coordinates: [polygon.map(coord => [coord.lng, coord.lat])]
-            };
+            const warningIcon = document.createElement('span');
+            warningIcon.className = 'warning-icon';
+            warningIcon.textContent = '⚠️';
 
-            // Calculate centroid for weather
-            const centroid = this.calculateCentroid(polygon);
-            
-            // Calculate area
-            const area = this.calculatePolygonArea(polygon);
+            const warningText = document.createElement('span');
+            warningText.className = 'warning-text';
+            warningText.innerHTML = `<strong>${recommendation}</strong>`;
 
-            const response = await fetch('http://localhost:5000/analyze', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    geometry: geometry,
-                    centroid: [centroid.lat, centroid.lng]
-                })
-            });
+            warningDiv.appendChild(warningIcon);
+            warningDiv.appendChild(warningText);
+            earlyWarningsEl.appendChild(warningDiv);
+        });
+    }
 
-            const results = await response.json();
+    generateEarlyWarnings(results) {
+        const earlyWarningsEl = document.getElementById('early-warnings-list');
+        if (!earlyWarningsEl) return;
 
-            if (response.ok) {
-                results.area = area; // Add calculated area to results
-                this.currentResults = results;
-                this.displayResults(results);
-                this.updateMapVisualization(results);
-                this.updateStatus('', 'Connected');
-            } else {
-                this.showError(results.error || 'Analysis failed');
-                this.updateStatus('error', 'Error');
+        // Clear existing content
+        earlyWarningsEl.innerHTML = '';
+
+        const warnings = [];
+
+        // Analyze risk factors and generate warnings
+        if (results.risk_assessment && results.risk_assessment.risk_factors) {
+            const riskFactors = results.risk_assessment.risk_factors;
+            const riskLevel = results.risk_assessment.risk_level;
+
+            // High vegetation risk
+            if (riskFactors.vegetation_risk > 0.7) {
+                warnings.push('High vegetation degradation risk detected. Consider implementing reforestation programs.');
             }
 
-        } catch (error) {
-            this.showError('Network error: ' + error.message);
-            this.updateStatus('error', 'Disconnected');
-        } finally {
-            this.isAnalyzing = false;
-            this.setAnalyzingState(false);
-        }
-    }
+            // High erosion risk
+            if (riskFactors.erosion_risk > 0.7) {
+                warnings.push('Severe soil erosion risk. Implement soil conservation measures immediately.');
+            }
 
-    calculateCentroid(coords) {
-        let latSum = 0, lngSum = 0;
-        coords.forEach(coord => {
-            latSum += coord.lat;
-            lngSum += coord.lng;
-        });
-        return {
-            lat: latSum / coords.length,
-            lng: lngSum / coords.length
-        };
-    }
+            // High weather risk
+            if (riskFactors.weather_risk > 0.7) {
+                warnings.push('Extreme weather vulnerability. Prepare for potential flooding or drought conditions.');
+            }
 
-    calculatePolygonArea(coords) {
-        // Simple area calculation using shoelace formula
-        let area = 0;
-        const n = coords.length;
-        
-        for (let i = 0; i < n; i++) {
-            const j = (i + 1) % n;
-            area += coords[i].lng * coords[j].lat;
-            area -= coords[j].lng * coords[i].lat;
-        }
-        
-        area = Math.abs(area) / 2;
-        
-        // Convert to hectares (rough approximation)
-        const lat = coords[0].lat;
-        const metersPerDegreeLat = 111320;
-        const metersPerDegreeLng = 111320 * Math.cos(lat * Math.PI / 180);
-        const areaInSquareMeters = area * metersPerDegreeLat * metersPerDegreeLng;
-        const hectares = areaInSquareMeters / 10000;
-        
-        return hectares;
-    }
+            // Land cover issues
+            if (results.land_cover && results.land_cover.land_cover_types) {
+                const landCoverTypes = results.land_cover.land_cover_types;
+                const totalPixels = Object.values(landCoverTypes).reduce((sum, count) => sum + count, 0);
 
-    displayResults(results) {
-        // Hide default message
-        const defaultMessage = document.getElementById('default-message');
-        if (defaultMessage) {
-            defaultMessage.style.display = 'none';
-        }
+                // Check for high bare land percentage
+                const bareLandTypes = ['bare_ground', 'bare_soil', 'urban'];
+                let bareLandPixels = 0;
+                bareLandTypes.forEach(type => {
+                    if (landCoverTypes[type]) bareLandPixels += landCoverTypes[type];
+                });
 
-        // Show results content
-        const resultsContent = document.getElementById('results-content');
-        if (resultsContent) {
-            resultsContent.style.display = 'block';
-        }
+                if (bareLandPixels / totalPixels > 0.5) {
+                    warnings.push('High percentage of bare land detected. Increased risk of soil erosion and desertification.');
+                }
 
-        // Update risk indicator
-        this.updateRiskIndicator(results);
+                // Check for water body presence
+                if (landCoverTypes['water'] && landCoverTypes['water'] / totalPixels > 0.3) {
+                    warnings.push('Significant water body presence. Monitor for potential flooding risks.');
+                }
+            }
 
-        // Update overview tab
-        this.updateOverviewTab(results);
+            // Weather-based warnings
+            if (results.weather) {
+                const temp = results.weather.main?.temp;
+                const humidity = results.weather.main?.humidity;
+                const weatherDesc = results.weather.weather_description;
 
-        // Update risk analysis tab
-        this.updateRiskTab(results);
-    }
+                if (temp > 35) {
+                    warnings.push('Extreme heat conditions detected. High risk of vegetation stress and wildfires.');
+                }
 
-    updateRiskIndicator(results) {
-        const riskAssessment = results.risk_assessment;
-        if (!riskAssessment) return;
+                if (humidity < 20) {
+                    warnings.push('Very low humidity levels. Increased fire risk and soil moisture depletion.');
+                }
 
-        const riskLevel = document.getElementById('risk-level');
-        const riskScore = document.getElementById('risk-score');
-        const riskIndicator = document.getElementById('risk-indicator');
+                if (weatherDesc && weatherDesc.toLowerCase().includes('rain')) {
+                    warnings.push('Precipitation detected. Monitor for potential soil erosion and flooding.');
+                }
+            }
 
-        if (riskLevel && riskScore && riskIndicator) {
-            riskLevel.textContent = riskAssessment.risk_level;
-            riskScore.textContent = `${(riskAssessment.overall_risk_score * 100).toFixed(1)}%`;
-
-            // Update risk indicator styling
-            riskIndicator.className = 'risk-indicator';
-            const riskClass = riskAssessment.risk_level.toLowerCase().replace(' ', '-');
-            riskIndicator.classList.add(riskClass);
-        }
-    }
-
-    updateOverviewTab(results) {
-        // Update NDVI
-        const ndviValue = document.getElementById('ndvi-value');
-        if (results.ndvi && results.ndvi.NDVI) {
-            const ndvi = results.ndvi.NDVI;
-            ndviValue.textContent = ndvi.toFixed(3);
-        }
-
-        // Update land cover
-        const landCoverSummary = document.getElementById('land-cover-summary');
-        if (results.land_cover && results.land_cover.Map) {
-            const lcData = results.land_cover.Map;
-            const dominantType = Object.keys(lcData).reduce((a, b) => lcData[a] > lcData[b] ? a : b);
-            const dominantLabel = this.getLandCoverLabel(parseInt(dominantType));
-            landCoverSummary.textContent = dominantLabel;
-        }
-
-        // Update slope
-        const slopeValue = document.getElementById('slope-value');
-        if (results.slope && results.slope.slope_mean) {
-            const slope = results.slope.slope_mean;
-            slopeValue.textContent = `${slope.toFixed(1)}°`;
-        }
-
-        // Update area
-        const areaValue = document.getElementById('area-value');
-        if (results.area) {
-            areaValue.textContent = `${results.area.toFixed(2)} ha`;
-        }
-
-        // Update temperature
-        const temperatureValue = document.getElementById('temperature-value');
-        if (results.weather && results.weather.main) {
-            temperatureValue.textContent = `${results.weather.main.temp}°C`;
-        }
-
-        // Update humidity
-        const humidityValue = document.getElementById('humidity-value');
-        if (results.weather && results.weather.main) {
-            humidityValue.textContent = `${results.weather.main.humidity}%`;
-        }
-    }
-
-    updateRiskTab(results) {
-        const riskAssessment = results.risk_assessment;
-        if (!riskAssessment || !riskAssessment.risk_factors) return;
-
-        const factors = riskAssessment.risk_factors;
-
-        // Update risk factor meters
-        this.updateRiskMeter('vegetation-risk', factors.vegetation_risk);
-        this.updateRiskMeter('landcover-risk', factors.land_cover_risk);
-        this.updateRiskMeter('erosion-risk', factors.erosion_risk);
-        this.updateRiskMeter('weather-risk', factors.weather_risk);
-
-        // Update early warnings
-        this.updateEarlyWarnings(results);
-    }
-
-    updateRiskMeter(elementId, riskValue) {
-        const fillElement = document.getElementById(`${elementId}-fill`);
-        const percentElement = document.getElementById(`${elementId}-percent`);
-
-        if (fillElement && percentElement) {
-            const percentage = (riskValue * 100).toFixed(1);
-            fillElement.style.setProperty('--risk-width', `${percentage}%`);
-            percentElement.textContent = `${percentage}%`;
-        }
-    }
-
-    updateEarlyWarnings(results) {
-        const warningsList = document.getElementById('warnings-list');
-        if (!warningsList) return;
-
-        let warnings = [];
-
-        // Get warnings from weather data
-        if (results.weather && results.weather.early_warnings) {
-            warnings = warnings.concat(results.weather.early_warnings);
-        }
-
-        // Get warnings from risk assessment
-        if (results.risk_assessment && results.risk_assessment.recommendations) {
-            warnings = warnings.concat(results.risk_assessment.recommendations.slice(0, 2));
+            // Overall risk level warnings
+            if (riskLevel === 'High') {
+                warnings.push('Critical risk level detected. Immediate intervention required to prevent land degradation.');
+            } else if (riskLevel === 'Medium') {
+                warnings.push('Moderate risk level. Implement preventive measures to maintain land health.');
+            }
         }
 
         if (warnings.length === 0) {
-            warningsList.innerHTML = '<div class="warning-item">No immediate warnings</div>';
-        } else {
-            warningsList.innerHTML = warnings.map(warning => 
-                `<div class="warning-item">${warning}</div>`
-            ).join('');
-        }
-    }
-
-
-    updateMapVisualization(results) {
-        console.log('updateMapVisualization called with results:', results);
-        
-        // Update polygon color based on risk level
-        const riskAssessment = results.risk_assessment;
-        console.log('Risk assessment:', riskAssessment);
-        console.log('Current polygon:', this.mapHandler.currentPolygon);
-        console.log('Current polygon layer:', this.mapHandler.currentPolygonLayer);
-        
-        if (riskAssessment && this.mapHandler.currentPolygon) {
-            const riskColor = riskAssessment.risk_color;
-            const riskLevel = riskAssessment.risk_level;
-            
-            console.log(`Updating polygon with ${riskLevel} color: ${riskColor}`);
-            
-            // Update polygon color with risk-based styling
-            this.mapHandler.updatePolygonColor(riskColor);
-            
-            // Add a popup to show risk information
-            this.addRiskPopup(riskLevel, riskColor);
-            
-            console.log(`Polygon updated with ${riskLevel} color: ${riskColor}`);
-        } else {
-            console.warn('Cannot update polygon color - missing risk assessment or polygon');
-            if (!riskAssessment) console.warn('No risk assessment found');
-            if (!this.mapHandler.currentPolygon) console.warn('No current polygon found');
+            const noWarningsDiv = document.createElement('div');
+            noWarningsDiv.className = 'no-warnings';
+            noWarningsDiv.textContent = 'No early warnings at this time';
+            earlyWarningsEl.appendChild(noWarningsDiv);
+            return;
         }
 
-        // Add NDVI color overlay if available
-        if (results.ndvi && this.currentResults) {
-            const geometry = {
-                type: 'Polygon',
-                coordinates: [this.mapHandler.currentPolygon.map(coord => [coord.lng, coord.lat])]
-            };
-            this.mapHandler.addNDVIOverlay(geometry, results.ndvi);
-        }
-    }
-    
-    addRiskPopup(riskLevel, riskColor) {
-        if (this.mapHandler.currentPolygonLayer) {
-            const riskScore = this.currentResults?.risk_assessment?.overall_risk_score;
-            const riskPercentage = riskScore ? (riskScore * 100).toFixed(1) : 'N/A';
-            
-            const popupContent = `
-                <div style="text-align: center; font-weight: bold;">
-                    <div style="color: ${riskColor}; font-size: 16px; margin-bottom: 5px;">
-                        ${riskLevel}
-                    </div>
-                    <div style="font-size: 14px;">
-                        Risk Score: ${riskPercentage}%
-                    </div>
-                </div>
-            `;
-            
-            this.mapHandler.currentPolygonLayer.bindPopup(popupContent, {
-                closeButton: true,
-                autoClose: false,
-                closeOnClick: false
-            }).openPopup();
-        }
-    }
+        warnings.forEach(warning => {
+            const warningDiv = document.createElement('div');
+            warningDiv.className = 'early-warning-item';
 
-    getLandCoverLabel(code) {
-        const labels = {
-            10: 'Tree cover',
-            20: 'Shrubland',
-            30: 'Grassland',
-            40: 'Cropland',
-            50: 'Built-up',
-            60: 'Bare / sparse vegetation',
-            70: 'Snow and ice',
-            80: 'Permanent water bodies',
-            90: 'Herbaceous wetland',
-            95: 'Mangroves',
-            100: 'Moss and lichen'
-        };
-        return labels[code] || `Class ${code}`;
-    }
+            const warningIcon = document.createElement('span');
+            warningIcon.className = 'warning-icon';
+            warningIcon.textContent = '⚠️';
 
-    showLoading(message) {
-        const resultsContent = document.getElementById('results-content');
-        const defaultMessage = document.getElementById('default-message');
-        
-        if (resultsContent) {
-            resultsContent.style.display = 'none';
-        }
-        if (defaultMessage) {
-            defaultMessage.innerHTML = `<div class="loading">${message}</div>`;
-            defaultMessage.style.display = 'block';
-        }
+            const warningText = document.createElement('span');
+            warningText.className = 'warning-text';
+            warningText.innerHTML = `<strong>${warning}</strong>`;
+
+            warningDiv.appendChild(warningIcon);
+            warningDiv.appendChild(warningText);
+            earlyWarningsEl.appendChild(warningDiv);
+        });
     }
 
     showError(message) {
-        const resultsContent = document.getElementById('results-content');
-        const defaultMessage = document.getElementById('default-message');
-        
-        if (resultsContent) {
-            resultsContent.style.display = 'none';
-        }
-        if (defaultMessage) {
-            defaultMessage.innerHTML = `<div class="error">${message}</div>`;
-            defaultMessage.style.display = 'block';
-        }
-    }
-
-    clearResults() {
-        const resultsContent = document.getElementById('results-content');
-        const defaultMessage = document.getElementById('default-message');
-        
-        if (resultsContent) {
-            resultsContent.style.display = 'none';
-        }
-        if (defaultMessage) {
-            defaultMessage.innerHTML = '<p>Draw a polygon on the map and click Analyze to get comprehensive land analysis.</p>';
-            defaultMessage.style.display = 'block';
-        }
-
-        // Reset risk indicator
-        const riskLevel = document.getElementById('risk-level');
-        const riskScore = document.getElementById('risk-score');
-        const riskIndicator = document.getElementById('risk-indicator');
-        
-        if (riskLevel && riskScore && riskIndicator) {
-            riskLevel.textContent = '-';
-            riskScore.textContent = '-';
-            riskIndicator.className = 'risk-indicator';
-        }
-
-        // Reset polygon color to default
-        if (this.mapHandler.currentPolygonLayer) {
-            this.mapHandler.currentPolygonLayer.setStyle({
-                color: '#4caf50',
-                fillColor: '#4caf50',
-                fillOpacity: 0.2,
-                weight: 2,
-                opacity: 0.8
-            });
-            // Remove any popups
-            this.mapHandler.currentPolygonLayer.closePopup();
-        }
-
-        this.currentResults = null;
-    }
-
-    setAnalyzingState(analyzing) {
-        const analyzeBtn = document.getElementById('analyze');
-        if (analyzeBtn) {
-            analyzeBtn.disabled = analyzing;
-            analyzeBtn.textContent = analyzing ? 'Analyzing...' : 'Analyze';
-        }
-    }
-
-    async searchLocation() {
-        const roiInput = document.getElementById('roi-input');
-        const placeName = roiInput.value.trim();
-        
-        if (!placeName) {
-            this.showError('Please enter a place name.');
-            return;
-        }
-
-        this.showLoading('Searching for location...');
-
-        try {
-            const response = await fetch('http://localhost:5000/geocode', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    place_name: placeName
-                })
-            });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                // Create a polygon around the location using bounding box
-                const bbox = result.boundingbox;
-                const coordinates = [
-                    [parseFloat(bbox[0]), parseFloat(bbox[2])], // SW corner
-                    [parseFloat(bbox[0]), parseFloat(bbox[3])], // SE corner
-                    [parseFloat(bbox[1]), parseFloat(bbox[3])], // NE corner
-                    [parseFloat(bbox[1]), parseFloat(bbox[2])], // NW corner
-                    [parseFloat(bbox[0]), parseFloat(bbox[2])]  // Close polygon
-                ];
-                
-                // Add polygon to map
-                this.mapHandler.clearDrawings();
-                this.mapHandler.addPolygonToMap(coordinates);
-                
-                // Center map on location
-                this.mapHandler.map.setView([result.lat, result.lon], 10);
-                
-                // Clear input and show success
-                roiInput.value = '';
-                this.showSuccess(`Location found: ${result.display_name}`);
-                
-            } else {
-                this.showError(result.error || 'Location not found');
-            }
-
-        } catch (error) {
-            this.showError('Network error: ' + error.message);
-        }
-    }
-
-    showSuccess(message) {
-        const resultsContent = document.getElementById('results-content');
-        const defaultMessage = document.getElementById('default-message');
-        
-        if (resultsContent) {
-            resultsContent.style.display = 'none';
-        }
-        if (defaultMessage) {
-            defaultMessage.innerHTML = `<div class="success">${message}</div>`;
-            defaultMessage.style.display = 'block';
-        }
-    }
-
-    async checkConnectionStatus() {
-        const statusDot = document.getElementById('connection-status');
-        const statusText = document.getElementById('status-text');
-        
-        if (statusDot && statusText) {
-            statusDot.className = 'status-dot connecting';
-            statusText.textContent = 'Checking...';
-            
-            try {
-                const response = await fetch('http://localhost:5000/health');
-                const data = await response.json();
-                
-                if (response.ok) {
-                    statusDot.className = 'status-dot';
-                    statusText.textContent = 'Connected';
-                } else {
-                    statusDot.className = 'status-dot error';
-                    statusText.textContent = 'Error';
-                }
-            } catch (error) {
-                statusDot.className = 'status-dot error';
-                statusText.textContent = 'Disconnected';
-            }
-        }
-    }
-
-    updateStatus(status, text) {
-        const statusDot = document.getElementById('connection-status');
-        const statusText = document.getElementById('status-text');
-
-        if (statusDot && statusText) {
-            statusDot.className = `status-dot ${status}`;
-            statusText.textContent = text;
-        }
-    }
-
-    // Historical Analysis Methods
-    async getHistoricalNDVI() {
-        const polygon = this.mapHandler.getCurrentPolygon();
-        if (!polygon) {
-            this.showError('Please draw a polygon first.');
-            return;
-        }
-
-        const yearsInput = document.getElementById('historical-years');
-        const years = yearsInput && yearsInput.value ? parseInt(yearsInput.value) : 10;
-
-        this.showLoading('Fetching historical NDVI data...');
-
-        try {
-            const geometry = {
-                type: 'Polygon',
-                coordinates: [polygon.map(coord => [coord.lng, coord.lat])]
-            };
-
-            const response = await fetch('http://localhost:5000/historical/ndvi', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    geometry: geometry,
-                    years: years
-                })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                this.displayHistoricalNDVI(data);
-                this.showSuccess('Historical NDVI data loaded successfully.');
-            } else {
-                this.showError(data.error || 'Failed to fetch historical NDVI');
-            }
-        } catch (error) {
-            this.showError('Network error: ' + error.message);
-        }
-    }
-
-    async getHistoricalWeather() {
-        const polygon = this.mapHandler.getCurrentPolygon();
-        if (!polygon) {
-            this.showError('Please draw a polygon first.');
-            return;
-        }
-
-        const centroid = this.calculateCentroid(polygon);
-        const yearsInput = document.getElementById('historical-years');
-        const years = yearsInput && yearsInput.value ? parseInt(yearsInput.value) : 10;
-
-        this.showLoading('Fetching historical weather data...');
-
-        try {
-            const response = await fetch(`http://localhost:5000/historical/weather/${centroid.lat}/${centroid.lng}?years=${years}`);
-
-            const data = await response.json();
-
-            if (response.ok) {
-                this.displayHistoricalWeather(data);
-                this.showSuccess('Historical weather data loaded successfully.');
-            } else {
-                this.showError(data.error || 'Failed to fetch historical weather');
-            }
-        } catch (error) {
-            this.showError('Network error: ' + error.message);
-        }
-    }
-
-    // Forecasting Methods
-    async forecastNDVI() {
-        const polygon = this.mapHandler.getCurrentPolygon();
-        if (!polygon) {
-            this.showError('Please draw a polygon first.');
-            return;
-        }
-
-        const monthsInput = document.getElementById('forecast-months');
-        const months = monthsInput && monthsInput.value ? parseInt(monthsInput.value) : 6;
-
-        this.showLoading('Generating NDVI forecast...');
-
-        try {
-            const geometry = {
-                type: 'Polygon',
-                coordinates: [polygon.map(coord => [coord.lng, coord.lat])]
-            };
-
-            const response = await fetch('http://localhost:5000/forecast/ndvi', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    geometry: geometry,
-                    months: months
-                })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                this.displayForecastNDVI(data);
-                this.showSuccess('NDVI forecast generated successfully.');
-            } else {
-                this.showError(data.error || 'Failed to generate NDVI forecast');
-            }
-        } catch (error) {
-            this.showError('Network error: ' + error.message);
-        }
-    }
-
-    async forecastWeather() {
-        const polygon = this.mapHandler.getCurrentPolygon();
-        if (!polygon) {
-            this.showError('Please draw a polygon first.');
-            return;
-        }
-
-        const centroid = this.calculateCentroid(polygon);
-        const monthsInput = document.getElementById('forecast-months');
-        const months = monthsInput && monthsInput.value ? parseInt(monthsInput.value) : 6;
-
-        this.showLoading('Generating weather forecast...');
-
-        try {
-            const response = await fetch(`http://localhost:5000/forecast/weather/${centroid.lat}/${centroid.lng}?months=${months}`);
-
-            const data = await response.json();
-
-            if (response.ok) {
-                this.displayForecastWeather(data);
-                this.showSuccess('Weather forecast generated successfully.');
-            } else {
-                this.showError(data.error || 'Failed to generate weather forecast');
-            }
-        } catch (error) {
-            this.showError('Network error: ' + error.message);
-        }
-    }
-
-    // Display Methods for Historical and Forecast Data
-    getChartColors() {
-        const theme = document.documentElement.getAttribute('data-theme') || 'light';
-        if (theme === 'dark') {
-            return {
-                ndvi: {
-                    border: 'rgb(0, 255, 127)',
-                    background: 'linear-gradient(135deg, rgba(0, 255, 127, 0.3), rgba(0, 255, 127, 0.1))',
-                    pointBackground: 'rgb(0, 255, 127)',
-                    pointBorder: 'rgb(0, 255, 127)'
-                },
-                temperature: {
-                    border: 'rgb(255, 69, 0)',
-                    background: 'linear-gradient(135deg, rgba(255, 69, 0, 0.3), rgba(255, 69, 0, 0.1))',
-                    pointBackground: 'rgb(255, 69, 0)',
-                    pointBorder: 'rgb(255, 69, 0)'
-                },
-                precipitation: {
-                    border: 'rgb(30, 144, 255)',
-                    background: 'linear-gradient(135deg, rgba(30, 144, 255, 0.3), rgba(30, 144, 255, 0.1))',
-                    pointBackground: 'rgb(30, 144, 255)',
-                    pointBorder: 'rgb(30, 144, 255)'
-                },
-                forecastNdvi: {
-                    border: 'rgb(255, 215, 0)',
-                    background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(255, 215, 0, 0.1))',
-                    pointBackground: 'rgb(255, 215, 0)',
-                    pointBorder: 'rgb(255, 215, 0)'
-                },
-                humidity: {
-                    border: 'rgb(138, 43, 226)',
-                    background: 'linear-gradient(135deg, rgba(138, 43, 226, 0.3), rgba(138, 43, 226, 0.1))',
-                    pointBackground: 'rgb(138, 43, 226)',
-                    pointBorder: 'rgb(138, 43, 226)'
-                }
-            };
-        } else {
-            return {
-                ndvi: {
-                    border: 'rgb(34, 139, 34)',
-                    background: 'linear-gradient(135deg, rgba(34, 139, 34, 0.4), rgba(34, 139, 34, 0.1))',
-                    pointBackground: 'rgb(34, 139, 34)',
-                    pointBorder: 'rgb(34, 139, 34)'
-                },
-                temperature: {
-                    border: 'rgb(220, 20, 60)',
-                    background: 'linear-gradient(135deg, rgba(220, 20, 60, 0.4), rgba(220, 20, 60, 0.1))',
-                    pointBackground: 'rgb(220, 20, 60)',
-                    pointBorder: 'rgb(220, 20, 60)'
-                },
-                precipitation: {
-                    border: 'rgb(25, 25, 112)',
-                    background: 'linear-gradient(135deg, rgba(25, 25, 112, 0.4), rgba(25, 25, 112, 0.1))',
-                    pointBackground: 'rgb(25, 25, 112)',
-                    pointBorder: 'rgb(25, 25, 112)'
-                },
-                forecastNdvi: {
-                    border: 'rgb(255, 140, 0)',
-                    background: 'linear-gradient(135deg, rgba(255, 140, 0, 0.4), rgba(255, 140, 0, 0.1))',
-                    pointBackground: 'rgb(255, 140, 0)',
-                    pointBorder: 'rgb(255, 140, 0)'
-                },
-                humidity: {
-                    border: 'rgb(75, 0, 130)',
-                    background: 'linear-gradient(135deg, rgba(75, 0, 130, 0.4), rgba(75, 0, 130, 0.1))',
-                    pointBackground: 'rgb(75, 0, 130)',
-                    pointBorder: 'rgb(75, 0, 130)'
-                }
-            };
-        }
-    }
-
-    // Generate sample data for demonstration
-    generateSampleData(type) {
-        const now = new Date();
-        const data = [];
-
-        switch(type) {
-            case 'historical-ndvi':
-                for (let i = 120; i >= 0; i--) {
-                    const date = new Date(now.getTime() - i * 30 * 24 * 60 * 60 * 1000);
-                    data.push({
-                        date: date.toISOString().split('T')[0],
-                        value: Math.max(0, Math.min(1, 0.3 + 0.4 * Math.sin(i * 0.1) + Math.random() * 0.2))
-                    });
-                }
-                return {
-                    dates: data.map(d => d.date),
-                    ndvi_values: data.map(d => d.value)
-                };
-
-            case 'historical-weather':
-                for (let i = 120; i >= 0; i--) {
-                    const date = new Date(now.getTime() - i * 30 * 24 * 60 * 60 * 1000);
-                    data.push({
-                        date: date.toISOString().split('T')[0],
-                        temperature: 20 + 10 * Math.sin(i * 0.1) + Math.random() * 5,
-                        rainfall: Math.max(0, 50 + 30 * Math.sin(i * 0.15) + Math.random() * 20)
-                    });
-                }
-                return {
-                    dates: data.map(d => d.date),
-                    temperature: data.map(d => d.temperature),
-                    rainfall: data.map(d => d.rainfall)
-                };
-
-            case 'forecast-ndvi':
-                for (let i = 0; i < 12; i++) {
-                    const futureDate = new Date(now.getTime() + i * 30 * 24 * 60 * 60 * 1000);
-                    data.push({
-                        month: futureDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-                        ndvi: Math.max(0, Math.min(1, 0.4 + 0.3 * Math.sin(i * 0.5) + Math.random() * 0.15))
-                    });
-                }
-                return data;
-
-            case 'forecast-weather':
-                for (let i = 0; i < 12; i++) {
-                    const futureDate = new Date(now.getTime() + i * 30 * 24 * 60 * 60 * 1000);
-                    data.push({
-                        month: futureDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-                        temperature: 22 + 8 * Math.sin(i * 0.5) + Math.random() * 3,
-                        precipitation: Math.max(0, 40 + 25 * Math.sin(i * 0.6) + Math.random() * 15)
-                    });
-                }
-                return data;
-
-            default:
-                return null;
-        }
-    }
-
-    displayHistoricalNDVI(data) {
-        const canvas = document.getElementById('ndvi-chart');
-        if (!canvas) return;
-
-        // Destroy existing chart if it exists
-        if (canvas.chart) {
-            canvas.chart.destroy();
-        }
-
-        const ctx = canvas.getContext('2d');
-        const dates = data.dates || [];
-        const ndviValues = data.ndvi_values || [];
-        const colors = this.getChartColors();
-        const theme = document.documentElement.getAttribute('data-theme') || 'light';
-        const textColor = theme === 'dark' ? '#ffffff' : '#000000';
-        const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
-
-        canvas.chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: dates,
-                datasets: [{
-                    label: 'NDVI',
-                    data: ndviValues,
-                    borderColor: colors.ndvi.border,
-                    backgroundColor: colors.ndvi.background,
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                backgroundColor: theme === 'dark' ? '#2a2a2a' : '#ffffff',
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Historical NDVI Trends',
-                        color: textColor
-                    },
-                    legend: {
-                        labels: {
-                            color: textColor
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: { color: textColor },
-                        grid: { color: gridColor }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        max: 1,
-                        ticks: { color: textColor },
-                        grid: { color: gridColor }
-                    }
-                }
-            }
-        });
-    }
-
-    displayHistoricalWeather(data) {
-        const canvas = document.getElementById('weather-chart');
-        if (!canvas) return;
-
-        // Destroy existing chart if it exists
-        if (canvas.chart) {
-            canvas.chart.destroy();
-        }
-
-        const ctx = canvas.getContext('2d');
-        const dates = data.dates || [];
-        const tempData = data.temperature || [];
-        const precipData = data.rainfall || [];
-        const colors = this.getChartColors();
-        const theme = document.documentElement.getAttribute('data-theme') || 'light';
-        const textColor = theme === 'dark' ? '#ffffff' : '#000000';
-        const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
-
-        canvas.chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: dates,
-                datasets: [{
-                    label: 'Temperature (°C)',
-                    data: tempData,
-                    borderColor: colors.temperature.border,
-                    backgroundColor: colors.temperature.background,
-                    yAxisID: 'y',
-                    tension: 0.1
-                }, {
-                    label: 'Precipitation (mm)',
-                    data: precipData,
-                    borderColor: colors.precipitation.border,
-                    backgroundColor: colors.precipitation.background,
-                    yAxisID: 'y1',
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                backgroundColor: theme === 'dark' ? '#2a2a2a' : '#ffffff',
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Historical Weather Trends',
-                        color: textColor
-                    },
-                    legend: {
-                        labels: {
-                            color: textColor
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: { color: textColor },
-                        grid: { color: gridColor }
-                    },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: {
-                            display: true,
-                            text: 'Temperature (°C)',
-                            color: textColor
-                        },
-                        ticks: { color: textColor },
-                        grid: { color: gridColor }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: {
-                            display: true,
-                            text: 'Precipitation (mm)',
-                            color: textColor
-                        },
-                        ticks: { color: textColor },
-                        grid: {
-                            drawOnChartArea: false,
-                        },
-                    }
-                }
-            }
-        });
-    }
-
-    displayForecastNDVI(data) {
-        const canvas = document.getElementById('ndvi-forecast-chart');
-        if (!canvas) return;
-
-        // Destroy existing chart if it exists
-        if (canvas.chart) {
-            canvas.chart.destroy();
-        }
-
-        const ctx = canvas.getContext('2d');
-        const months = data.map(item => item.month);
-        const ndviValues = data.map(item => item.ndvi);
-        const colors = this.getChartColors();
-        const theme = document.documentElement.getAttribute('data-theme') || 'light';
-        const textColor = theme === 'dark' ? '#ffffff' : '#000000';
-        const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
-
-        ctx.canvas.style.backgroundColor = theme === 'dark' ? '#2a2a2a' : '#ffffff';
-
-        canvas.chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: months,
-                datasets: [{
-                    label: 'Forecasted NDVI',
-                    data: ndviValues,
-                    borderColor: colors.forecastNdvi.border,
-                    backgroundColor: colors.forecastNdvi.background,
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: colors.forecastNdvi.pointBackground,
-                    pointBorderColor: colors.forecastNdvi.pointBorder,
-                    pointRadius: 4,
-                    pointHoverRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'NDVI Forecast',
-                        color: textColor,
-                        font: {
-                            size: 16,
-                            weight: 'bold'
-                        }
-                    },
-                    legend: {
-                        labels: {
-                            color: textColor,
-                            font: {
-                                size: 12
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: {
-                            color: textColor,
-                            font: {
-                                size: 11
-                            }
-                        },
-                        grid: { color: gridColor }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        max: 1,
-                        ticks: {
-                            color: textColor,
-                            font: {
-                                size: 11
-                            },
-                            callback: function(value) {
-                                return value.toFixed(2);
-                            }
-                        },
-                        grid: { color: gridColor }
-                    }
-                },
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                }
-            }
-        });
-    }
-
-    displayForecastWeather(data) {
-        const canvas = document.getElementById('weather-forecast-chart');
-        if (!canvas) return;
-
-        // Destroy existing chart if it exists
-        if (canvas.chart) {
-            canvas.chart.destroy();
-        }
-
-        const ctx = canvas.getContext('2d');
-        const months = data.map(item => item.month);
-        const tempData = data.map(item => item.temperature);
-        const precipData = data.map(item => item.precipitation);
-        const colors = this.getChartColors();
-        const theme = document.documentElement.getAttribute('data-theme') || 'light';
-        const textColor = theme === 'dark' ? '#ffffff' : '#000000';
-        const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
-
-        ctx.canvas.style.backgroundColor = theme === 'dark' ? '#2a2a2a' : '#ffffff';
-
-        canvas.chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: months,
-                datasets: [{
-                    label: 'Temperature (°C)',
-                    data: tempData,
-                    borderColor: colors.temperature.border,
-                    backgroundColor: colors.temperature.background,
-                    yAxisID: 'y',
-                    tension: 0.1
-                }, {
-                    label: 'Precipitation (mm)',
-                    data: precipData,
-                    borderColor: colors.precipitation.border,
-                    backgroundColor: colors.precipitation.background,
-                    yAxisID: 'y1',
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Weather Forecast',
-                        color: textColor
-                    },
-                    legend: {
-                        labels: {
-                            color: textColor
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: { color: textColor },
-                        grid: { color: gridColor }
-                    },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: {
-                            display: true,
-                            text: 'Temperature (°C)',
-                            color: textColor
-                        },
-                        ticks: { color: textColor },
-                        grid: { color: gridColor }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: {
-                            display: true,
-                            text: 'Precipitation (mm)',
-                            color: textColor
-                        },
-                        ticks: { color: textColor },
-                        grid: {
-                            drawOnChartArea: false,
-                        },
-                    }
-                }
-            }
-        });
-    }
-
-    // Initialize future section charts with sample data
-    initFutureCharts() {
-        this.initVegetationChart();
-        this.initErosionChart();
-    }
-
-    initVegetationChart() {
-        const canvas = document.getElementById('futureVegetationChart');
-        if (!canvas) return;
-
-        // Destroy existing chart if it exists
-        if (canvas.chart) {
-            canvas.chart.destroy();
-        }
-
-        const ctx = canvas.getContext('2d');
-        const colors = this.getChartColors();
-        const theme = document.documentElement.getAttribute('data-theme') || 'light';
-        const textColor = theme === 'dark' ? '#ffffff' : '#000000';
-        const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
-
-        // Sample data for vegetation health trends over 5 years
-        const years = ['2024', '2025', '2026', '2027', '2028'];
-        const vegetationHealth = [0.65, 0.68, 0.72, 0.69, 0.74]; // NDVI values
-
-        canvas.chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: years,
-                datasets: [{
-                    label: 'Vegetation Health (NDVI)',
-                    data: vegetationHealth,
-                    borderColor: colors.ndvi.border,
-                    backgroundColor: colors.ndvi.background,
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: colors.ndvi.pointBackground,
-                    pointBorderColor: colors.ndvi.pointBorder,
-                    pointRadius: 6,
-                    pointHoverRadius: 8
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Predicted Vegetation Health (5 Years)',
-                        color: textColor,
-                        font: {
-                            size: 16,
-                            weight: 'bold'
-                        }
-                    },
-                    legend: {
-                        labels: {
-                            color: textColor,
-                            font: {
-                                size: 12
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: {
-                            color: textColor,
-                            font: {
-                                size: 11
-                            }
-                        },
-                        grid: { color: gridColor }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        max: 1,
-                        ticks: {
-                            color: textColor,
-                            font: {
-                                size: 11
-                            },
-                            callback: function(value) {
-                                return value.toFixed(2);
-                            }
-                        },
-                        grid: { color: gridColor },
-                        title: {
-                            display: true,
-                            text: 'NDVI Value',
-                            color: textColor,
-                            font: {
-                                size: 12
-                            }
-                        }
-                    }
-                },
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                }
-            }
-        });
-    }
-
-    initErosionChart() {
-        const canvas = document.getElementById('futureErosionChart');
-        if (!canvas) return;
-
-        // Destroy existing chart if it exists
-        if (canvas.chart) {
-            canvas.chart.destroy();
-        }
-
-        const ctx = canvas.getContext('2d');
-        const colors = this.getChartColors();
-        const theme = document.documentElement.getAttribute('data-theme') || 'light';
-        const textColor = theme === 'dark' ? '#ffffff' : '#000000';
-        const gridColor = theme === 'dark' ? '#555555' : '#dddddd';
-
-        // Sample data for erosion risk scenarios
-        const scenarios = ['Current', 'Scenario A', 'Scenario B', 'Scenario C'];
-        const erosionRisk = [45, 52, 38, 61]; // Risk percentages
-
-        canvas.chart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: scenarios,
-                datasets: [{
-                    label: 'Erosion Risk (%)',
-                    data: erosionRisk,
-                    backgroundColor: [
-                        colors.temperature.border, // Current - neutral
-                        '#ffc107', // Scenario A - moderate increase
-                        '#4caf50', // Scenario B - decrease
-                        '#f44336'  // Scenario C - high increase
-                    ],
-                    borderColor: [
-                        colors.temperature.border,
-                        '#ffc107',
-                        '#4caf50',
-                        '#f44336'
-                    ],
-                    borderWidth: 2,
-                    borderRadius: 4,
-                    borderSkipped: false
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Future Soil Erosion Risk Scenarios',
-                        color: textColor,
-                        font: {
-                            size: 16,
-                            weight: 'bold'
-                        }
-                    },
-                    legend: {
-                        display: false // Hide legend for cleaner look
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: {
-                            color: textColor,
-                            font: {
-                                size: 11
-                            }
-                        },
-                        grid: { color: gridColor }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            color: textColor,
-                            font: {
-                                size: 11
-                            },
-                            callback: function(value) {
-                                return value + '%';
-                            }
-                        },
-                        grid: { color: gridColor },
-                        title: {
-                            display: true,
-                            text: 'Risk Percentage',
-                            color: textColor,
-                            font: {
-                                size: 12
-                            }
-                        }
-                    }
-                },
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                }
-            }
-        });
+        // Show error toast/notification
+        console.error('Error:', message);
+        // You can implement a toast notification here
+        const notification = document.createElement('div');
+        notification.className = 'notification error';
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.remove();
+        }, 5000);
     }
 }
 
-// Initialize the application
-new LandCareApp();
+// Initialize app when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM Content Loaded, creating app instance');
+    window.app = new LandCareApp();
+});

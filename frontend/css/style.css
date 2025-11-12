@@ -550,16 +550,19 @@ button:disabled {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    min-width: 120px;
+    min-width: 180px;
+    width: 100%;
+    max-width: 250px;
 }
 
 .risk-fill {
     flex: 1;
-    height: 8px;
+    height: 12px;
     background: var(--border-color);
-    border-radius: 4px;
+    border-radius: 6px;
     overflow: hidden;
     position: relative;
+    transition: all 0.3s ease;
 }
 
 .risk-fill::after {
@@ -569,9 +572,20 @@ button:disabled {
     left: 0;
     height: 100%;
     width: var(--risk-width, 0%);
-    background: linear-gradient(90deg, #388e3c, #fbc02d, #f57c00, #d32f2f);
-    transition: width 0.3s ease;
-    border-radius: 4px;
+    transition: width 0.3s ease, background-color 0.3s ease;
+    border-radius: 6px;
+}
+
+.risk-fill.high-risk::after {
+    background-color: #d32f2f; /* Red for High Risk */
+}
+
+.risk-fill.medium-risk::after {
+    background-color: #ff9800; /* Orange for Medium Risk */
+}
+
+.risk-fill.low-risk::after {
+    background-color: #4caf50; /* Green for Low Risk */
 }
 
 .risk-percentage {
@@ -579,6 +593,63 @@ button:disabled {
     font-weight: bold;
     min-width: 35px;
     text-align: right;
+}
+
+.risk-level-text {
+    font-size: 0.7rem;
+    font-weight: bold;
+    min-width: 50px;
+    text-align: center;
+    padding: 2px 4px;
+    border-radius: 3px;
+    color: white;
+}
+
+.risk-level-text.high-risk {
+    background-color: #d32f2f;
+}
+
+.risk-level-text.medium-risk {
+    background-color: #ff9800;
+}
+
+.risk-level-text.low-risk {
+    background-color: #4caf50;
+}
+
+.risk-info-icon {
+    color: #666;
+    font-size: 0.8rem;
+    margin-left: 0.25rem;
+    cursor: help;
+    transition: color 0.2s ease;
+}
+
+.risk-info-icon:hover {
+    color: #4caf50;
+}
+
+.risk-info-icon::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 1000;
+    max-width: 250px;
+    word-wrap: break-word;
+    white-space: normal;
+    line-height: 1.4;
+}
+
+.risk-info-icon:hover::after {
+    opacity: 1;
 }
 
 .early-warnings {
@@ -1000,6 +1071,140 @@ button:disabled {
     .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* Leaflet Draw Cursor Overrides */
+.leaflet-draw-draw-polygon {
+    cursor: crosshair !important;
+}
+
+.leaflet-draw-draw-polygon.leaflet-draw-draw-ready {
+    cursor: crosshair !important;
+}
+
+.leaflet-container .leaflet-draw-draw-polygon {
+    cursor: crosshair !important;
+}
+
+.leaflet-draw-toolbar a {
+    cursor: pointer !important;
+}
+
+.leaflet-draw-toolbar a.leaflet-draw-draw-polygon {
+    cursor: pointer !important;
+}
+
+/* Polygon Risk Tags */
+.polygon-risk-tag-container {
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.polygon-risk-tag {
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    backdrop-filter: blur(4px);
+}
+
+.polygon-risk-tag.high-risk {
+    border-color: #d32f2f;
+    color: #d32f2f;
+}
+
+.polygon-risk-tag.medium-risk {
+    border-color: #ffc107;
+    color: #f57c00;
+}
+
+.polygon-risk-tag.low-risk {
+    border-color: #28a745;
+    color: #28a745;
+}
+
+/* Land Cover Details */
+.land-cover-details {
+    width: 100%;
+}
+
+.land-cover-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    border-bottom: 1px solid #eee;
+    gap: 0.5rem;
+}
+
+.land-cover-item:last-child {
+    border-bottom: none;
+}
+
+.land-cover-type {
+    font-weight: 500;
+    color: #2e7d32;
+    flex: 1;
+}
+
+.land-cover-value {
+    font-weight: 600;
+    color: #2e7d32;
+    text-align: right;
+    flex: 1;
+}
+
+.land-cover-percentage {
+    font-size: 0.9em;
+    color: #666;
+    margin-left: 0.25rem;
+}
+
+.info-icon {
+    font-size: 0.9em;
+    cursor: help;
+    opacity: 0.7;
+    margin-left: 0.25rem;
+}
+
+.info-icon:hover {
+    opacity: 1;
+}
+
+/* Early Warnings */
+.early-warning-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid #ffebee;
+}
+
+.early-warning-item:last-child {
+    border-bottom: none;
+}
+
+.warning-icon {
+    font-size: 1.2em;
+    flex-shrink: 0;
+}
+
+.warning-text {
+    font-size: 0.9em;
+    color: #d32f2f;
+    line-height: 1.4;
+}
+
+.no-warnings {
+    padding: 12px 0;
+    color: #666;
+    font-style: italic;
+    text-align: center;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .nav-container {
@@ -1085,5 +1290,27 @@ button:disabled {
 
     .md\:grid-cols-2 {
         grid-template-columns: 1fr;
+    }
+
+    /* Responsive risk meters for mobile */
+    .risk-meter {
+        min-width: 150px;
+        max-width: 200px;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+    /* Tablet responsive risk meters */
+    .risk-meter {
+        min-width: 160px;
+        max-width: 220px;
+    }
+}
+
+@media (min-width: 1025px) {
+    /* Desktop responsive risk meters */
+    .risk-meter {
+        min-width: 180px;
+        max-width: 250px;
     }
 }

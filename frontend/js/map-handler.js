@@ -139,57 +139,7 @@ class MapHandler {
         this.currentPolygonLayer = polygon;
     }
 
-    updatePolygonColor(color) {
-        console.log('updatePolygonColor called with color:', color);
-        console.log('currentPolygonLayer exists:', !!this.currentPolygonLayer);
-        
-        let polygonLayer = this.currentPolygonLayer;
-        
-        // Fallback: if currentPolygonLayer is not available, try to find it from drawnItems
-        if (!polygonLayer && this.drawnItems.getLayers().length > 0) {
-            console.log('currentPolygonLayer not found, searching in drawnItems...');
-            const layers = this.drawnItems.getLayers();
-            polygonLayer = layers.find(layer => layer instanceof L.Polygon);
-            if (polygonLayer) {
-                console.log('Found polygon layer in drawnItems, updating reference');
-                this.currentPolygonLayer = polygonLayer;
-            }
-        }
-        
-        if (polygonLayer) {
-            console.log('Updating polygon style with color:', color);
-            
-            // Update the polygon with risk-based color and enhanced styling
-            polygonLayer.setStyle({
-                color: color,
-                fillColor: color,
-                fillOpacity: 0.4,
-                weight: 3,
-                opacity: 0.8
-            });
-            
-            // Add a pulsing effect to make it more noticeable
-            polygonLayer.on('mouseover', function() {
-                this.setStyle({
-                    weight: 4,
-                    opacity: 1.0
-                });
-            });
-            
-            polygonLayer.on('mouseout', function() {
-                this.setStyle({
-                    weight: 3,
-                    opacity: 0.8
-                });
-            });
-            
-            console.log('Polygon color successfully updated to:', color);
-        } else {
-            console.error('No polygon layer found for color update');
-            console.log('Available layers in drawnItems:', this.drawnItems.getLayers());
-            console.log('drawnItems layer count:', this.drawnItems.getLayers().length);
-        }
-    }
+    // updatePolygonColor method removed - polygon color is now updated in updatePolygonRiskTag
 
     addNDVIOverlay(geometry, ndviData) {
         // Create NDVI color overlay
@@ -222,5 +172,88 @@ class MapHandler {
         if (this.currentPolygon) {
             this.map.fitBounds(this.currentPolygon);
         }
+    }
+
+    getPolygonCentroid(geometry) {
+        // Calculate centroid of a polygon from GeoJSON geometry
+        if (!geometry || geometry.type !== 'Polygon') {
+            return null;
+        }
+
+        const coordinates = geometry.coordinates[0];
+        let sumLat = 0, sumLon = 0;
+
+        for (const coord of coordinates) {
+            sumLon += coord[0];
+            sumLat += coord[1];
+        }
+
+        const centroidLon = sumLon / coordinates.length;
+        const centroidLat = sumLat / coordinates.length;
+
+        return [centroidLat, centroidLon]; // Return as [lat, lon]
+    }
+
+    startDrawing() {
+        if (this.drawControl) {
+            // Enable drawing mode
+            console.log('Drawing mode enabled');
+        }
+    }
+
+    updatePolygonRiskTag(riskLevel, riskScore) {
+        if (!this.currentPolygonLayer) return;
+
+        // Remove existing risk tag if any
+        this.clearPolygonRiskTag();
+
+        // Get risk color for styling
+        let riskColor = '#28a745'; // Default low risk
+        if (riskLevel.toLowerCase() === 'high') {
+            riskColor = '#d32f2f';
+        } else if (riskLevel.toLowerCase() === 'medium') {
+            riskColor = '#ffc107';
+        }
+
+        // Create risk tag element with bold risk and score, and colored background
+        const riskTag = L.divIcon({
+            html: `<div class="polygon-risk-tag ${riskLevel.toLowerCase().replace(' ', '-')}-risk" style="background-color: white; color: ${riskColor}; border-color: ${riskColor}; border: 2px solid ${riskColor}; font-size: 14px; padding: 4px;">
+                <strong style="font-size: 16px;">${riskLevel}</strong><br><small><strong style="font-size: 14px;">${(riskScore * 100).toFixed(0)}%</strong></small>
+            </div>`,
+            className: 'polygon-risk-tag-container',
+            iconSize: [140, 70],
+            iconAnchor: [70, 35]
+        });
+
+        // Update polygon color based on risk level
+        if (this.currentPolygonLayer) {
+            this.currentPolygonLayer.setStyle({
+                color: riskColor,
+                fillColor: riskColor,
+                fillOpacity: 0.3
+            });
+        }
+
+        // Calculate centroid for tag placement
+        const centroid = this.getPolygonCentroid(this.currentPolygonLayer.toGeoJSON().geometry);
+
+        // Add marker with risk tag
+        this.riskTagMarker = L.marker(centroid, { icon: riskTag }).addTo(this.map);
+    }
+
+    clearPolygonRiskTag() {
+        if (this.riskTagMarker) {
+            this.map.removeLayer(this.riskTagMarker);
+            this.riskTagMarker = null;
+        }
+    }
+
+    clearDrawings() {
+        this.drawnItems.clearLayers();
+        this.currentPolygon = null;
+        this.currentPolygonLayer = null;
+        this.ndviOverlay = null;
+        this.clearPolygonRiskTag();
+        console.log('Drawings cleared');
     }
 }

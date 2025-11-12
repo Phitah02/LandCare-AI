@@ -33,6 +33,14 @@
                 <li><a href="#cta-footer">Get involved</a></li>
             </ul>
             <div class="nav-actions">
+                <div id="auth-section">
+                    <button id="login-btn" class="btn-secondary">Login</button>
+                    <button id="register-btn" class="btn-primary">Sign Up</button>
+                </div>
+                <div id="user-section" style="display: none;">
+                    <span id="user-email"></span>
+                    <button id="logout-btn" class="btn-secondary">Logout</button>
+                </div>
                 <button id="theme-toggle" class="theme-toggle-btn">🌙 Dark Mode</button>
             </div>
             <div class="nav-toggle">
@@ -42,6 +50,48 @@
             </div>
         </div>
     </nav>
+
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <div id="login-form" class="auth-form">
+                <h2>Login to LandCare AI</h2>
+                <form id="login-form-element">
+                    <div class="form-group">
+                        <label for="login-email">Email</label>
+                        <input type="email" id="login-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" required>
+                    </div>
+                    <button type="submit" class="btn-primary">Login</button>
+                </form>
+                <p class="auth-switch">Don't have an account? <a href="#" id="switch-to-register">Sign up</a></p>
+            </div>
+            <div id="register-form" class="auth-form" style="display: none;">
+                <h2>Sign Up for LandCare AI</h2>
+                <form id="register-form-element">
+                    <div class="form-group">
+                        <label for="register-email">Email</label>
+                        <input type="email" id="register-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Password</label>
+                        <input type="password" id="register-password" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-confirm-password">Confirm Password</label>
+                        <input type="password" id="register-confirm-password" required>
+                    </div>
+                    <button type="submit" class="btn-primary">Sign Up</button>
+                </form>
+                <p class="auth-switch">Already have an account? <a href="#" id="switch-to-login">Login</a></p>
+            </div>
+        </div>
+    </div>
+
     <div id="app">
         <section id="hero" class="hero-section">
             <div class="hero-content">
@@ -61,7 +111,7 @@
                     <div class="feature-card">
                         <i class="fas fa-leaf"></i>
                         <h3>Vegetation</h3>
-                        <p>Monitor NDVI and vegetation health using satellite imagery to assess land productivity.</p>
+                        <p>Monitor NDVI, EVI, and SAVI vegetation indices using satellite imagery to assess land productivity and health.</p>
                     </div>
                     <div class="feature-card">
                         <i class="fas fa-mountain"></i>
@@ -100,7 +150,7 @@
                     <div id="map-container">
                         <div id="map"></div>
                         <div id="map-legend" class="map-legend">
-                            <h4>NDVI Legend</h4>
+                            <h4>Vegetation Indices Legend</h4>
                             <div class="legend-item">
                                 <div class="legend-color" style="background: #388e3c;"></div>
                                 <span>High Vegetation (0.8+)</span>
@@ -162,12 +212,16 @@
                                         <span class="stat-value" id="ndvi-value">-</span>
                                     </div>
                                     <div class="stat-item">
-                                        <span class="stat-label">Area:</span>
-                                        <span class="stat-value" id="area-value">-</span>
+                                        <span class="stat-label">EVI:</span>
+                                        <span class="stat-value" id="evi-value">-</span>
                                     </div>
                                     <div class="stat-item">
-                                        <span class="stat-label">Land Cover:</span>
-                                        <span class="stat-value" id="land-cover-summary">-</span>
+                                        <span class="stat-label">SAVI:</span>
+                                        <span class="stat-value" id="savi-value">-</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">Area:</span>
+                                        <span class="stat-value" id="area-value">-</span>
                                     </div>
                                     <div class="stat-item">
                                         <span class="stat-label">Slope:</span>
@@ -181,6 +235,14 @@
                                         <span class="stat-label">Humidity:</span>
                                         <span class="stat-value" id="humidity-value">-</span>
                                     </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">Weather:</span>
+                                        <span class="stat-value" id="weather-description-value">-</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">Land Cover:</span>
+                                        <div id="land-cover-details" class="land-cover-details"></div>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -188,37 +250,53 @@
                                 <div class="risk-breakdown">
                                     <h4>Risk Factors</h4>
                                     <div class="risk-factor">
-                                        <span class="risk-label">Vegetation Risk:</span>
+                                        <span class="risk-label">
+                                            Vegetation Risk:
+                                            <i class="fas fa-info-circle risk-info-icon" data-tooltip="Assesses vegetation health based on NDVI, EVI, and SAVI indices. High risk indicates degraded vegetation."></i>
+                                        </span>
                                         <div class="risk-meter">
                                             <div class="risk-fill" id="vegetation-risk-fill"></div>
                                             <span class="risk-percentage" id="vegetation-risk-percent">-</span>
+                                            <span class="risk-level-text" id="vegetation-risk-level">-</span>
                                         </div>
                                     </div>
                                     <div class="risk-factor">
-                                        <span class="risk-label">Land Cover Risk:</span>
+                                        <span class="risk-label">
+                                            Land Cover Risk:
+                                            <i class="fas fa-info-circle risk-info-icon" data-tooltip="Evaluates land cover types and their susceptibility to degradation. High risk suggests vulnerable land cover."></i>
+                                        </span>
                                         <div class="risk-meter">
                                             <div class="risk-fill" id="landcover-risk-fill"></div>
                                             <span class="risk-percentage" id="landcover-risk-percent">-</span>
+                                            <span class="risk-level-text" id="landcover-risk-level">-</span>
                                         </div>
                                     </div>
                                     <div class="risk-factor">
-                                        <span class="risk-label">Erosion Risk:</span>
+                                        <span class="risk-label">
+                                            Erosion Risk:
+                                            <i class="fas fa-info-circle risk-info-icon" data-tooltip="Measures soil erosion potential based on slope and land cover. High risk indicates severe erosion threat."></i>
+                                        </span>
                                         <div class="risk-meter">
                                             <div class="risk-fill" id="erosion-risk-fill"></div>
                                             <span class="risk-percentage" id="erosion-risk-percent">-</span>
+                                            <span class="risk-level-text" id="erosion-risk-level">-</span>
                                         </div>
                                     </div>
                                     <div class="risk-factor">
-                                        <span class="risk-label">Weather Risk:</span>
+                                        <span class="risk-label">
+                                            Weather Risk:
+                                            <i class="fas fa-info-circle risk-info-icon" data-tooltip="Analyzes weather conditions like temperature and humidity for land health impact. High risk signals adverse weather effects."></i>
+                                        </span>
                                         <div class="risk-meter">
                                             <div class="risk-fill" id="weather-risk-fill"></div>
                                             <span class="risk-percentage" id="weather-risk-percent">-</span>
+                                            <span class="risk-level-text" id="weather-risk-level">-</span>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="early-warnings" id="early-warnings-section">
                                     <h4>Early Warnings</h4>
-                                    <div id="warnings-list"></div>
+                                    <div id="early-warnings-list"></div>
                                 </div>
                             </div>
                             
