@@ -37,15 +37,18 @@ def enhance_weather_data(weather_data):
     try:
         if 'error' in weather_data:
             return weather_data
-        
+
         enhanced = weather_data.copy()
-        
+
         # Add agricultural insights
         temp = enhanced['main']['temp']
         humidity = enhanced['main']['humidity']
         wind_speed = enhanced['wind']['speed']
         pressure = enhanced['main']['pressure']
-        
+
+        # Get weather description
+        weather_description = get_weather_description(weather_data)
+
         # Calculate agricultural risk indicators
         enhanced['agricultural_insights'] = {
             'drought_risk': calculate_drought_risk(temp, humidity, wind_speed),
@@ -54,10 +57,13 @@ def enhance_weather_data(weather_data):
             'optimal_growing_conditions': assess_growing_conditions(temp, humidity, wind_speed),
             'soil_moisture_indicator': estimate_soil_moisture(temp, humidity, pressure)
         }
-        
+
+        # Add descriptive weather information
+        enhanced['weather_description'] = weather_description
+
         # Add early warning indicators
         enhanced['early_warnings'] = generate_early_warnings(enhanced['agricultural_insights'])
-        
+
         return enhanced
     except Exception as e:
         weather_data['error'] = str(e)
@@ -258,7 +264,7 @@ def generate_early_warnings(insights):
     return warnings
 
 def get_historical_weather(lat, lon, years=10):
-    """Get historical weather data using GEE ERA5 dataset."""
+    """Get historical weather data using GEE ERA5 dataset with parallel processing."""
     try:
         # Check if GEE is initialized
         try:
@@ -296,40 +302,7 @@ def get_historical_weather(lat, lon, years=10):
             .filterDate(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')) \
             .select(['mean_2m_air_temperature', 'total_precipitation'])
 
-        # Function to extract monthly averages
-        def get_monthly_data(year_month):
-            year, month = year_month.split('-')
-            start = f"{year}-{month}-01"
-            end = f"{year}-{int(month)+1:02d}-01" if int(month) < 12 else f"{int(year)+1}-01-01"
-
-            monthly_data = era5.filterDate(start, end)
-
-            if monthly_data.size().getInfo() == 0:
-                return None
-
-            # Calculate monthly means
-            temp_mean = monthly_data.select('mean_2m_air_temperature').mean()
-            precip_sum = monthly_data.select('total_precipitation').sum()
-
-            # Extract values
-            temp_val = temp_mean.reduceRegion(
-                reducer=ee.Reducer.mean(),
-                geometry=point,
-                scale=27830  # ERA5 resolution
-            ).get('mean_2m_air_temperature')
-
-            precip_val = precip_sum.reduceRegion(
-                reducer=ee.Reducer.mean(),
-                geometry=point,
-                scale=27830
-            ).get('total_precipitation')
-
-            return {
-                'temperature': temp_val.getInfo() if temp_val else None,
-                'rainfall': precip_val.getInfo() * 1000 if precip_val else None  # Convert to mm
-            }
-
-        # Generate year-month combinations
+        # Create list of year-month combinations
         year_months = []
         current = start_date
         while current <= end_date:
@@ -339,17 +312,69 @@ def get_historical_weather(lat, lon, years=10):
             else:
                 current = current.replace(month=current.month + 1)
 
-        # Collect data
+        # Define function to extract monthly data (to be mapped over)
+        def get_monthly_weather(year_month_str):
+            def inner_calc(ym_str):
+                year, month = ym_str.split('-')
+                year = ee.Number.parse(year)
+                month = ee.Number.parse(month)
+
+                start = ee.Date.fromYMD(year, month, 1)
+                end = ee.Date.fromYMD(
+                    ee.Algorithms.If(month.eq(12), year.add(1), year),
+                    ee.Algorithms.If(month.eq(12), 1, month.add(1)),
+                    1
+                )
+
+                monthly_data = era5.filterDate(start, end)
+                monthly_size = monthly_data.size()
+
+                # Calculate monthly aggregates
+                def compute_weather():
+                    temp_mean = monthly_data.select('mean_2m_air_temperature').mean()
+                    precip_sum = monthly_data.select('total_precipitation').sum()
+
+                    # Extract values
+                    temp_val = temp_mean.reduceRegion(
+                        reducer=ee.Reducer.mean(),
+                        geometry=point,
+                        scale=27830
+                    ).get('mean_2m_air_temperature')
+
+                    precip_val = precip_sum.reduceRegion(
+                        reducer=ee.Reducer.mean(),
+                        geometry=point,
+                        scale=27830
+                    ).get('total_precipitation')
+
+                    return ee.Dictionary({
+                        'temperature': temp_val,
+                        'rainfall': precip_val
+                    })
+
+                # Return null dict if no data, otherwise compute
+                return ee.Algorithms.If(monthly_size.gt(0), compute_weather(), ee.Dictionary())
+
+            return inner_calc(year_month_str)
+
+        # Create ee.List and map function in parallel
+        ym_list = ee.List(year_months)
+        weather_results = ym_list.map(lambda ym: get_monthly_weather(ym))
+
+        # Get results
+        results_list = weather_results.getInfo()
+
+        # Process results
         dates = []
         temperatures = []
         rainfall = []
 
-        for ym in year_months:
-            data = get_monthly_data(ym)
-            if data and data['temperature'] is not None:
+        for i, ym in enumerate(year_months):
+            data = results_list[i]
+            if data and 'temperature' in data and data['temperature'] is not None:
                 dates.append(f"{ym}-15")
                 temperatures.append(data['temperature'] - 273.15)  # Convert Kelvin to Celsius
-                rainfall.append(data['rainfall'] or 0)
+                rainfall.append((data['rainfall'] or 0) * 1000)  # Convert to mm
 
         return {
             'dates': dates,
@@ -423,3 +448,68 @@ def calculate_average_monthly_rainfall(historical_rainfall):
 
     except Exception as e:
         return {'error': str(e)}
+
+def get_weather_description(weather_data):
+    """Generate a descriptive weather summary."""
+    try:
+        if 'weather' not in weather_data or not weather_data['weather']:
+            return "Weather data unavailable"
+
+        main_weather = weather_data['weather'][0]['main'].lower()
+        description = weather_data['weather'][0]['description'].lower()
+        temp = weather_data['main']['temp']
+        humidity = weather_data['main']['humidity']
+
+        # Create descriptive summary
+        if main_weather == 'clear':
+            if temp > 25:
+                desc = "Sunny and warm"
+            elif temp > 15:
+                desc = "Clear and pleasant"
+            else:
+                desc = "Clear and cool"
+        elif main_weather == 'clouds':
+            if 'few' in description:
+                desc = "Partly cloudy"
+            elif 'scattered' in description or 'broken' in description:
+                desc = "Mostly cloudy"
+            else:
+                desc = "Overcast"
+        elif main_weather == 'rain':
+            if 'light' in description:
+                desc = "Light rain"
+            elif 'moderate' in description:
+                desc = "Moderate rain"
+            else:
+                desc = "Heavy rain"
+        elif main_weather == 'drizzle':
+            desc = "Light drizzle"
+        elif main_weather == 'thunderstorm':
+            desc = "Thunderstorms"
+        elif main_weather == 'snow':
+            desc = "Snow"
+        elif main_weather == 'mist' or main_weather == 'fog':
+            desc = "Foggy"
+        else:
+            desc = description.capitalize()
+
+        # Add temperature context
+        if temp > 30:
+            desc += ", hot"
+        elif temp > 25:
+            desc += ", warm"
+        elif temp < 10:
+            desc += ", cold"
+        elif temp < 5:
+            desc += ", very cold"
+
+        # Add humidity context
+        if humidity > 80:
+            desc += ", humid"
+        elif humidity < 30:
+            desc += ", dry"
+
+        return desc
+
+    except Exception as e:
+        return f"Weather description unavailable: {str(e)}"

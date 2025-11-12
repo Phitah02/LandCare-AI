@@ -111,8 +111,129 @@ def get_ndvi(geometry):
             'note': 'Mock data due to error'
         }
 
+def get_evi(geometry):
+    """Calculate EVI (Enhanced Vegetation Index) for given geometry."""
+    try:
+        # Check if GEE is properly initialized
+        try:
+            test_geometry = ee.Geometry.Point([0, 0])
+            gee_initialized = True
+        except:
+            gee_initialized = False
+
+        if not gee_initialized:
+            # Return mock data for development
+            return {
+                'EVI': 0.45,
+                'note': 'Mock data - GEE not initialized'
+            }
+
+        # Define the region of interest
+        roi = ee.Geometry.Polygon(geometry['coordinates'])
+
+        # Get Sentinel-2 image collection
+        collection = ee.ImageCollection('COPERNICUS/S2_SR') \
+            .filterBounds(roi) \
+            .filterDate('2023-01-01', '2024-01-01') \
+            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
+            .sort('system:time_start', False)
+
+        # Get the most recent image
+        image = collection.first()
+
+        # Calculate EVI: 2.5 * ((NIR - RED) / (NIR + 6*RED - 7.5*BLUE + 1))
+        nir = image.select('B8')
+        red = image.select('B4')
+        blue = image.select('B2')
+
+        evi = image.expression(
+            '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))',
+            {
+                'NIR': nir,
+                'RED': red,
+                'BLUE': blue
+            }
+        ).rename('EVI')
+
+        # Get EVI stats
+        stats = evi.reduceRegion(
+            reducer=ee.Reducer.mean(),
+            geometry=roi,
+            scale=10,
+            maxPixels=1e9
+        )
+
+        return stats.getInfo()
+    except Exception as e:
+        # Return mock data on error
+        return {
+            'EVI': 0.45,
+            'error': str(e),
+            'note': 'Mock data due to error'
+        }
+
+def get_savi(geometry, L=0.5):
+    """Calculate SAVI (Soil-Adjusted Vegetation Index) for given geometry."""
+    try:
+        # Check if GEE is properly initialized
+        try:
+            test_geometry = ee.Geometry.Point([0, 0])
+            gee_initialized = True
+        except:
+            gee_initialized = False
+
+        if not gee_initialized:
+            # Return mock data for development
+            return {
+                'SAVI': 0.55,
+                'note': 'Mock data - GEE not initialized'
+            }
+
+        # Define the region of interest
+        roi = ee.Geometry.Polygon(geometry['coordinates'])
+
+        # Get Sentinel-2 image collection
+        collection = ee.ImageCollection('COPERNICUS/S2_SR') \
+            .filterBounds(roi) \
+            .filterDate('2023-01-01', '2024-01-01') \
+            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
+            .sort('system:time_start', False)
+
+        # Get the most recent image
+        image = collection.first()
+
+        # Calculate SAVI: ((NIR - RED) / (NIR + RED + L)) * (1 + L)
+        nir = image.select('B8')
+        red = image.select('B4')
+
+        savi = image.expression(
+            '((NIR - RED) / (NIR + RED + L)) * (1 + L)',
+            {
+                'NIR': nir,
+                'RED': red,
+                'L': L
+            }
+        ).rename('SAVI')
+
+        # Get SAVI stats
+        stats = savi.reduceRegion(
+            reducer=ee.Reducer.mean(),
+            geometry=roi,
+            scale=10,
+            maxPixels=1e9
+        )
+
+        return stats.getInfo()
+    except Exception as e:
+        # Return mock data on error
+        return {
+            'SAVI': 0.55,
+            'error': str(e),
+            'note': 'Mock data due to error'
+        }
+
 def get_historical_ndvi(geometry, years=10):
-    """Get historical NDVI data for the past N years with monthly averages."""
+    """Get historical NDVI data for the past N years with monthly averages using parallel processing."""
     try:
         # Check if GEE is properly initialized
         try:
@@ -148,27 +269,7 @@ def get_historical_ndvi(geometry, years=10):
             .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
             .select(['B4', 'B8'])
 
-        # Function to calculate monthly NDVI
-        def calculate_monthly_ndvi(year_month):
-            year, month = year_month.split('-')
-            start = f"{year}-{month}-01"
-            end = f"{year}-{int(month)+1:02d}-01" if int(month) < 12 else f"{int(year)+1}-01-01"
-
-            monthly_collection = collection.filterDate(start, end)
-            if monthly_collection.size().getInfo() == 0:
-                return None
-
-            # Get mean NDVI for the month
-            monthly_ndvi = monthly_collection.mean().normalizedDifference(['B8', 'B4'])
-            mean_ndvi = monthly_ndvi.reduceRegion(
-                reducer=ee.Reducer.mean(),
-                geometry=roi,
-                scale=10,
-                maxPixels=1e9
-            )
-            return mean_ndvi.getInfo().get('nd', None)
-
-        # Generate list of year-month combinations
+        # Create a list of year-month combinations
         year_months = []
         current = start_date
         while current <= end_date:
@@ -178,11 +279,50 @@ def get_historical_ndvi(geometry, years=10):
             else:
                 current = current.replace(month=current.month + 1)
 
-        # Calculate NDVI for each month
+        # Define a function to calculate NDVI for each month (to be mapped over)
+        def calculate_monthly_ndvi(ym_str):
+            year, month = ym_str.split('-')
+            year = ee.Number.parse(year)
+            month = ee.Number.parse(month)
+
+            start = ee.Date.fromYMD(year, month, 1)
+            end = ee.Date.fromYMD(
+                ee.Algorithms.If(month.eq(12), year.add(1), year),
+                ee.Algorithms.If(month.eq(12), 1, month.add(1)),
+                1
+            )
+
+            monthly_collection = collection.filterDate(start, end)
+            monthly_size = monthly_collection.size()
+
+            # Calculate mean NDVI for the month
+            def compute_ndvi():
+                monthly_ndvi = monthly_collection.mean().normalizedDifference(['B8', 'B4'])
+                mean_ndvi = monthly_ndvi.reduceRegion(
+                    reducer=ee.Reducer.mean(),
+                    geometry=roi,
+                    scale=10,
+                    maxPixels=1e9
+                )
+                return mean_ndvi.get('nd')
+
+            # Return null if no images, otherwise compute NDVI
+            return ee.Algorithms.If(monthly_size.gt(0), compute_ndvi(), None)
+
+        # Create an ee.List of year-month strings
+        ym_list = ee.List(year_months)
+
+        # Map the function over the list in parallel
+        ndvi_results = ym_list.map(calculate_monthly_ndvi)
+
+        # Get the results as a list
+        results_list = ndvi_results.getInfo()
+
+        # Process results
         dates = []
         values = []
-        for ym in year_months:
-            ndvi_val = calculate_monthly_ndvi(ym)
+        for i, ym in enumerate(year_months):
+            ndvi_val = results_list[i]
             if ndvi_val is not None:
                 dates.append(f"{ym}-15")  # Mid-month date
                 values.append(ndvi_val)
@@ -207,6 +347,261 @@ def get_historical_ndvi(geometry, years=10):
             'note': 'Mock data due to error'
         }
 
+def get_historical_evi(geometry, years=10):
+    """Get historical EVI data for the past N years with monthly averages using parallel processing."""
+    try:
+        # Check if GEE is properly initialized
+        try:
+            test_geometry = ee.Geometry.Point([0, 0])
+            gee_initialized = True
+        except:
+            gee_initialized = False
+
+        if not gee_initialized:
+            # Return mock historical data
+            dates = []
+            values = []
+            for year in range(2023 - years + 1, 2024):
+                for month in range(1, 13):
+                    dates.append(f"{year}-{month:02d}-15")
+                    values.append(0.35 + 0.25 * np.sin(month * np.pi / 6) + np.random.normal(0, 0.08))
+            return {
+                'dates': dates,
+                'evi_values': values,
+                'note': 'Mock data - GEE not initialized'
+            }
+
+        roi = ee.Geometry.Polygon(geometry['coordinates'])
+
+        # Calculate start and end dates
+        end_date = datetime.datetime.now()
+        start_date = end_date - datetime.timedelta(days=365 * years)
+
+        # Get Sentinel-2 collection
+        collection = ee.ImageCollection('COPERNICUS/S2_SR') \
+            .filterBounds(roi) \
+            .filterDate(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')) \
+            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
+            .select(['B2', 'B4', 'B8'])
+
+        # Create a list of year-month combinations
+        year_months = []
+        current = start_date
+        while current <= end_date:
+            year_months.append(f"{current.year}-{current.month:02d}")
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
+
+        # Define a function to calculate EVI for each month (to be mapped over)
+        def calculate_monthly_evi(ym_str):
+            year, month = ym_str.split('-')
+            year = ee.Number.parse(year)
+            month = ee.Number.parse(month)
+
+            start = ee.Date.fromYMD(year, month, 1)
+            end = ee.Date.fromYMD(
+                ee.Algorithms.If(month.eq(12), year.add(1), year),
+                ee.Algorithms.If(month.eq(12), 1, month.add(1)),
+                1
+            )
+
+            monthly_collection = collection.filterDate(start, end)
+            monthly_size = monthly_collection.size()
+
+            # Calculate mean EVI for the month
+            def compute_evi():
+                monthly_image = monthly_collection.mean()
+                nir = monthly_image.select('B8')
+                red = monthly_image.select('B4')
+                blue = monthly_image.select('B2')
+
+                monthly_evi = monthly_image.expression(
+                    '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))',
+                    {
+                        'NIR': nir,
+                        'RED': red,
+                        'BLUE': blue
+                    }
+                )
+
+                mean_evi = monthly_evi.reduceRegion(
+                    reducer=ee.Reducer.mean(),
+                    geometry=roi,
+                    scale=10,
+                    maxPixels=1e9
+                )
+                return mean_evi.get('constant')
+
+            # Return null if no images, otherwise compute EVI
+            return ee.Algorithms.If(monthly_size.gt(0), compute_evi(), None)
+
+        # Create an ee.List of year-month strings
+        ym_list = ee.List(year_months)
+
+        # Map the function over the list in parallel
+        evi_results = ym_list.map(calculate_monthly_evi)
+
+        # Get the results as a list
+        results_list = evi_results.getInfo()
+
+        # Process results
+        dates = []
+        values = []
+        for i, ym in enumerate(year_months):
+            evi_val = results_list[i]
+            if evi_val is not None:
+                dates.append(f"{ym}-15")  # Mid-month date
+                values.append(evi_val)
+
+        return {
+            'dates': dates,
+            'evi_values': values
+        }
+
+    except Exception as e:
+        # Return mock data on error
+        dates = []
+        values = []
+        for year in range(2023 - years + 1, 2024):
+            for month in range(1, 13):
+                dates.append(f"{year}-{month:02d}-15")
+                values.append(0.35 + 0.25 * np.sin(month * np.pi / 6) + np.random.normal(0, 0.08))
+        return {
+            'dates': dates,
+            'evi_values': values,
+            'error': str(e),
+            'note': 'Mock data due to error'
+        }
+
+def get_historical_savi(geometry, years=10, L=0.5):
+    """Get historical SAVI data for the past N years with monthly averages using parallel processing."""
+    try:
+        # Check if GEE is properly initialized
+        try:
+            test_geometry = ee.Geometry.Point([0, 0])
+            gee_initialized = True
+        except:
+            gee_initialized = False
+
+        if not gee_initialized:
+            # Return mock historical data
+            dates = []
+            values = []
+            for year in range(2023 - years + 1, 2024):
+                for month in range(1, 13):
+                    dates.append(f"{year}-{month:02d}-15")
+                    values.append(0.45 + 0.35 * np.sin(month * np.pi / 6) + np.random.normal(0, 0.1))
+            return {
+                'dates': dates,
+                'savi_values': values,
+                'note': 'Mock data - GEE not initialized'
+            }
+
+        roi = ee.Geometry.Polygon(geometry['coordinates'])
+
+        # Calculate start and end dates
+        end_date = datetime.datetime.now()
+        start_date = end_date - datetime.timedelta(days=365 * years)
+
+        # Get Sentinel-2 collection
+        collection = ee.ImageCollection('COPERNICUS/S2_SR') \
+            .filterBounds(roi) \
+            .filterDate(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')) \
+            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
+            .select(['B4', 'B8'])
+
+        # Create a list of year-month combinations
+        year_months = []
+        current = start_date
+        while current <= end_date:
+            year_months.append(f"{current.year}-{current.month:02d}")
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
+
+        # Define a function to calculate SAVI for each month (to be mapped over)
+        def calculate_monthly_savi(ym_str):
+            year, month = ym_str.split('-')
+            year = ee.Number.parse(year)
+            month = ee.Number.parse(month)
+
+            start = ee.Date.fromYMD(year, month, 1)
+            end = ee.Date.fromYMD(
+                ee.Algorithms.If(month.eq(12), year.add(1), year),
+                ee.Algorithms.If(month.eq(12), 1, month.add(1)),
+                1
+            )
+
+            monthly_collection = collection.filterDate(start, end)
+            monthly_size = monthly_collection.size()
+
+            # Calculate mean SAVI for the month
+            def compute_savi():
+                monthly_image = monthly_collection.mean()
+                nir = monthly_image.select('B8')
+                red = monthly_image.select('B4')
+
+                monthly_savi = monthly_image.expression(
+                    '((NIR - RED) / (NIR + RED + L)) * (1 + L)',
+                    {
+                        'NIR': nir,
+                        'RED': red,
+                        'L': L
+                    }
+                )
+
+                mean_savi = monthly_savi.reduceRegion(
+                    reducer=ee.Reducer.mean(),
+                    geometry=roi,
+                    scale=10,
+                    maxPixels=1e9
+                )
+                return mean_savi.get('constant')
+
+            # Return null if no images, otherwise compute SAVI
+            return ee.Algorithms.If(monthly_size.gt(0), compute_savi(), None)
+
+        # Create an ee.List of year-month strings
+        ym_list = ee.List(year_months)
+
+        # Map the function over the list in parallel
+        savi_results = ym_list.map(calculate_monthly_savi)
+
+        # Get the results as a list
+        results_list = savi_results.getInfo()
+
+        # Process results
+        dates = []
+        values = []
+        for i, ym in enumerate(year_months):
+            savi_val = results_list[i]
+            if savi_val is not None:
+                dates.append(f"{ym}-15")  # Mid-month date
+                values.append(savi_val)
+
+        return {
+            'dates': dates,
+            'savi_values': values
+        }
+
+    except Exception as e:
+        # Return mock data on error
+        dates = []
+        values = []
+        for year in range(2023 - years + 1, 2024):
+            for month in range(1, 13):
+                dates.append(f"{year}-{month:02d}-15")
+                values.append(0.45 + 0.35 * np.sin(month * np.pi / 6) + np.random.normal(0, 0.1))
+        return {
+            'dates': dates,
+            'savi_values': values,
+            'error': str(e),
+            'note': 'Mock data due to error'
+        }
+
 def get_land_cover(geometry):
     """Get land cover classification for given geometry."""
     try:
@@ -217,7 +612,7 @@ def get_land_cover(geometry):
             gee_initialized = True
         except:
             gee_initialized = False
-        
+
         if not gee_initialized:
             # Return mock data for development
             return {
@@ -228,9 +623,16 @@ def get_land_cover(geometry):
                     '40': 1800,  # Cropland
                     '50': 450    # Built-up
                 },
+                'land_cover_types': {
+                    'Tree cover': 1250,
+                    'Shrubland': 850,
+                    'Grassland': 2100,
+                    'Cropland': 1800,
+                    'Built-up': 450
+                },
                 'note': 'Mock data - GEE not initialized'
             }
-        
+
         roi = ee.Geometry.Polygon(geometry['coordinates'])
 
         # ESA WorldCover 2021
@@ -244,7 +646,46 @@ def get_land_cover(geometry):
             maxPixels=1e9
         )
 
-        return lc_stats.getInfo()
+        lc_data = lc_stats.getInfo()
+
+        # Convert numeric codes to human-readable land cover types
+        land_cover_mapping = {
+            '10': 'Tree cover',
+            '20': 'Shrubland',
+            '30': 'Grassland',
+            '40': 'Cropland',
+            '50': 'Built-up',
+            '60': 'Bare / sparse vegetation',
+            '70': 'Snow and ice',
+            '80': 'Water bodies',
+            '90': 'Herbaceous wetland',
+            '95': 'Mangroves',
+            '100': 'Moss and lichen'
+        }
+
+        land_cover_types = {}
+        total_pixels = 0
+        if 'Map' in lc_data:
+            for code, count in lc_data['Map'].items():
+                if code in land_cover_mapping:
+                    land_cover_types[land_cover_mapping[code]] = count
+                    total_pixels += count
+
+        # Convert pixel counts to km² (10m resolution = 100m² per pixel = 0.0001 km² per pixel)
+        pixel_to_km2 = 0.0001  # 10m × 10m = 100m² = 0.0001 km²
+        land_cover_areas = {}
+        for land_type, pixel_count in land_cover_types.items():
+            area_km2 = pixel_count * pixel_to_km2
+            percentage = (pixel_count / total_pixels * 100) if total_pixels > 0 else 0
+            land_cover_areas[land_type] = {
+                'area_km2': round(area_km2, 2),
+                'percentage': round(percentage, 1),
+                'pixel_count': pixel_count
+            }
+
+        lc_data['land_cover_types'] = land_cover_types  # Keep original for backward compatibility
+        lc_data['land_cover_areas'] = land_cover_areas  # New km² format
+        return lc_data
     except Exception as e:
         # Return mock data on error
         return {
@@ -254,6 +695,13 @@ def get_land_cover(geometry):
                 '30': 2100,  # Grassland
                 '40': 1800,  # Cropland
                 '50': 450    # Built-up
+            },
+            'land_cover_types': {
+                'Tree cover': 1250,
+                'Shrubland': 850,
+                'Grassland': 2100,
+                'Cropland': 1800,
+                'Built-up': 450
             },
             'error': str(e),
             'note': 'Mock data due to error'
@@ -301,7 +749,7 @@ def get_slope_data(geometry):
             'note': 'Mock data due to error'
         }
 
-def calculate_risk_score(ndvi_data, land_cover_data, slope_data, weather_data):
+def calculate_risk_score(ndvi_data, land_cover_data, slope_data, weather_data, evi_data=None, savi_data=None):
     """Calculate comprehensive risk score for land degradation."""
     try:
         # Initialize risk factors
@@ -309,16 +757,29 @@ def calculate_risk_score(ndvi_data, land_cover_data, slope_data, weather_data):
         land_cover_risk = 0
         erosion_risk = 0
         weather_risk = 0
-        
-        # Vegetation risk (based on NDVI)
+
+        # Vegetation risk (based on multiple indices for better accuracy)
         ndvi = ndvi_data.get('NDVI', 0.5)
-        if ndvi < 0.2:
+        evi = evi_data.get('EVI', 0.4) if evi_data else None
+        savi = savi_data.get('SAVI', 0.5) if savi_data else None
+
+        # Use average of available vegetation indices for more robust assessment
+        vegetation_indices = [ndvi]
+        if evi is not None:
+            vegetation_indices.append(evi)
+        if savi is not None:
+            vegetation_indices.append(savi)
+
+        avg_vegetation = sum(vegetation_indices) / len(vegetation_indices)
+
+        # Adjust risk calculation based on vegetation density (use EVI for dense vegetation, SAVI for sparse)
+        if avg_vegetation < 0.2:
             vegetation_risk = 0.9  # Very high risk
-        elif ndvi < 0.4:
+        elif avg_vegetation < 0.4:
             vegetation_risk = 0.7  # High risk
-        elif ndvi < 0.6:
+        elif avg_vegetation < 0.6:
             vegetation_risk = 0.4  # Medium risk
-        elif ndvi < 0.8:
+        elif avg_vegetation < 0.8:
             vegetation_risk = 0.2  # Low risk
         else:
             vegetation_risk = 0.1  # Very low risk
