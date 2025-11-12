@@ -2,28 +2,34 @@
 
 ## Overview
 
-LandCare AI is a comprehensive multi-section web application for land analysis, featuring a modern, user-friendly interface with dedicated sections for introduction, features, interactive exploration, future predictions, and calls to action. Users can draw polygons on an interactive map and receive detailed insights including NDVI (Normalized Difference Vegetation Index), land cover classification, risk assessment, historical trends, and weather forecasting using Google Earth Engine (GEE) and OpenWeatherMap APIs.
+LandCare AI is a comprehensive multi-section web application for land analysis, featuring a modern, user-friendly interface with dedicated sections for introduction, features, interactive exploration, future predictions, and calls to action. Users must authenticate to access analysis features. The platform provides detailed insights including multiple vegetation indices (NDVI, EVI, SAVI), land cover classification, slope analysis, comprehensive risk assessment, historical trends analysis, and weather forecasting using Google Earth Engine (GEE), OpenWeatherMap APIs, and advanced ARIMA modeling for predictions. A sophisticated caching system ensures optimal performance for repeated analyses.
 
 ### Key Features
+- **User Authentication**: Secure login/signup system required for accessing analysis features.
 - **Hero Section**: Engaging introduction with title, subtitle, and call-to-action button.
 - **Features Section**: Highlight key capabilities with cards for Vegetation Analysis, Soil Health, and Water Management.
 - **Interactive Explore Area**: Draw and edit polygons on a Leaflet-based map with satellite imagery, integrated with a sidebar for results.
-- **Real-time Analysis**: Instant NDVI, land cover, slope, area calculation, and weather data.
-- **Risk Assessment**: Comprehensive risk scoring based on vegetation, land cover, erosion, and weather factors.
-- **Historical Analysis**: View NDVI and weather trends over the past 10+ years with interactive charts.
-- **Future Predictions**: Forecast NDVI and weather conditions for up to 24 months ahead with bar charts.
-- **Location Search**: Search for places by name and automatically create analysis polygons.
+- **Multi-Index Vegetation Analysis**: Comprehensive analysis using NDVI, EVI (Enhanced Vegetation Index), and SAVI (Soil-Adjusted Vegetation Index).
+- **Real-time Analysis**: Instant vegetation indices, land cover classification, slope analysis, area calculation, and current weather data.
+- **Advanced Risk Assessment**: Comprehensive risk scoring based on vegetation health, land cover types, erosion potential, and weather conditions with early warning recommendations.
+- **Historical Analysis**: View vegetation indices and weather trends over the past 10+ years with interactive charts and caching for performance.
+- **Future Predictions**: ARIMA-based forecasting of NDVI and weather conditions for up to 24 months ahead with confidence intervals.
+- **Location Search**: Search for places by name using OpenStreetMap geocoding and automatically create analysis polygons.
+- **Performance Caching**: Intelligent caching system for historical data and ML models to ensure fast response times.
 - **Dark/Light Theme**: Toggle between themes for better user experience.
 - **Responsive Design**: Optimized for desktop and mobile devices.
 - **CTA Footer**: Call-to-action section encouraging user engagement.
 
 ### Core Functionality
+- **User Authentication**: JWT-based authentication system with secure password hashing.
 - **Interactive Map**: Users draw polygons using Leaflet.js and Leaflet.Draw on the frontend.
-- **Analysis**: Backend processes GeoJSON polygons via Flask API with comprehensive data processing.
+- **Analysis**: Backend processes GeoJSON polygons via Flask API with comprehensive data processing and caching.
 - **Integrations**:
-  - Google Earth Engine for NDVI, land cover, slope, and historical data.
-  - OpenWeatherMap for current weather and forecasting.
-  - Supabase for data storage and user management.
+  - Google Earth Engine for NDVI, EVI, SAVI, land cover, slope, and historical satellite data.
+  - OpenWeatherMap for current weather, historical weather, and forecasting.
+  - ERA5 dataset (via GEE) for long-term climate data.
+  - Supabase for data storage, user management, and caching.
+- **Machine Learning**: ARIMA time series forecasting for vegetation and weather predictions.
 - **Visualization**: Results displayed in tabbed panels with metrics, charts, risk indicators, and early warnings.
 
 ### Architecture
@@ -37,32 +43,51 @@ User draws polygon → GeoJSON → GEE Processing → Visualization
 ```
 LandCare/
 ├── backend/
-│   ├── app.py                 # Main Flask application
+│   ├── app.py                 # Main Flask application with authentication
 │   ├── config/
 │   │   ├── __init__.py
 │   │   └── config.py          # Configuration settings
-│   ├── gee_processor.py       # GEE integration for NDVI and land cover
-│   ├── weather_integration.py # OpenWeatherMap integration
-│   ├── forecasting.py         # Forecasting logic for NDVI and weather
-│   ├── models.py              # Database models and Supabase integration
+│   ├── gee_processor.py       # GEE integration for vegetation indices, land cover, slope
+│   ├── weather_integration.py # OpenWeatherMap and ERA5 integration
+│   ├── forecasting.py         # ARIMA forecasting for NDVI and weather
+│   ├── models.py              # Database models, caching, and Supabase integration
 │   ├── requirements.txt       # Python dependencies
+│   ├── test_auth.py           # Authentication tests
+│   ├── test_authentication_enforcement.py # Auth enforcement tests
+│   ├── test_db.py             # Database tests
 │   └── .env.example           # Environment variables template
 ├── frontend/
 │   ├── index.html             # Main HTML page with multi-section layout
+│   ├── login.html             # User login page
+│   ├── signup.html            # User registration page
 │   ├── css/
-│   │   └── style.css          # Styles for the application
+│   │   ├── style.css          # Main application styles
+│   │   └── login.css          # Authentication page styles
 │   ├── js/
-│   │   ├── app.js             # Main application logic
+│   │   ├── app.js             # Main application logic and authentication
+│   │   ├── login.js           # Login page functionality
+│   │   ├── signup.js          # Signup page functionality
 │   │   └── map-handler.js     # Leaflet map handling and drawing
-│   └── assets/                # (Optional) Images and other assets
+│   └── assets/                # Images, icons, and favicons
 ├── database/
 │   └── schema.sql             # Supabase database schema
 ├── .env.example               # Environment variables template
-├── test_geometry.json         # Test geometry file
-├── TODO.md                    # Development tasks and progress
+├── .gitignore                 # Git ignore rules
+├── LICENSE                    # MIT License
 ├── README.md                  # This file
-└── LICENSE
+└── TODO.md                    # Development tasks and progress
 ```
+
+## Database Schema
+
+The application uses Supabase with the following tables:
+
+- **users**: User accounts with email/password authentication
+- **analyses**: User analysis results (NDVI, land cover, weather, geometry)
+- **historical_data**: Cached historical NDVI, EVI, SAVI, and weather data
+- **forecasts**: ARIMA forecasting results for vegetation and weather
+- **cached_historical_data**: Performance cache for historical data (30-day expiration)
+- **cached_models**: Cached ARIMA models for forecasting (7-day expiration)
 
 ## Setup Instructions
 
@@ -139,41 +164,58 @@ LandCare/
    - The app will connect to the backend at `http://localhost:5000`.
 
 ### 4. Usage
-1. Open the app in your browser.
-2. **Hero Section**: Read the introduction and click "Explore Your Area" to scroll to the interactive section.
-3. **Features Section**: Review the key capabilities (Vegetation Analysis, Soil Health, Water Management).
-4. **Theme Toggle**: Click the "🌙 Dark Mode" button in the header to switch between light and dark themes.
-5. **Explore Section**: Use the interactive map and sidebar for analysis.
-   - **Location Search**: Enter a place name (e.g., "Nairobi, Kenya") in the search box and click "Search Location" to automatically create a polygon around that area.
-   - **Draw Polygon**: Click "Draw Polygon" to start drawing on the map, or use the searched location.
-   - Draw a polygon over an area of interest (e.g., farmland).
-   - Click "Analyze" to process:
-     - NDVI value for vegetation health.
-     - Land cover breakdown (e.g., cropland percentage).
-     - Slope and area calculations.
-     - Current weather at the polygon's center.
-     - Risk assessment with overall score and factor breakdowns.
-   - View results in the sidebar:
-     - **Statistics Tab**: Basic metrics and overview.
-     - **Risk Analysis Tab**: Detailed risk factors and early warnings.
-     - **Historical Analysis Tab**: Get historical NDVI and weather data (default 10 years).
-     - **Forecasting Tab**: Forecast NDVI and weather (default 6 months).
-   - Use "Clear/Reset" to reset the map and results.
-6. **Future Section**: View sample bar charts for health trends and risk levels (integrates with analysis results).
-7. **Footer**: Click "Be part of the solution" to return to the explore section.
+1. **Authentication**: Start by creating an account or logging in using the buttons in the navigation bar.
+    - Click "Sign Up" to create a new account with email and password.
+    - Click "Login" to access your existing account.
+    - All analysis features require authentication.
+
+2. Open the main app in your browser after logging in.
+
+3. **Hero Section**: Read the introduction and click "Explore Your Area" to scroll to the interactive section.
+
+4. **Features Section**: Review the key capabilities (Vegetation Analysis, Soil Health, Water Management).
+
+5. **Theme Toggle**: Click the "🌙 Dark Mode" button in the header to switch between light and dark themes.
+
+6. **Explore Section**: Use the interactive map and sidebar for analysis.
+    - **Location Search**: Enter a place name (e.g., "Nairobi, Kenya") in the search box and click "Search Location" to automatically create a polygon around that area.
+    - **Draw Polygon**: Click "Draw Polygon" to start drawing on the map, or use the searched location.
+    - Draw a polygon over an area of interest (e.g., farmland).
+    - Click "Analyze" to process:
+      - Multiple vegetation indices: NDVI, EVI, and SAVI for comprehensive vegetation health assessment.
+      - Land cover classification with area calculations.
+      - Slope analysis for erosion risk.
+      - Area calculations in hectares.
+      - Current weather conditions at the polygon's center.
+      - Comprehensive risk assessment with overall score and factor breakdowns.
+    - View results in the sidebar:
+      - **Statistics Tab**: Basic metrics including all vegetation indices, land cover, slope, area, and weather.
+      - **Risk Analysis Tab**: Detailed risk factors (vegetation, land cover, erosion, weather) with visual meters and early warnings.
+      - **Historical Analysis Tab**: View historical trends for NDVI, EVI, SAVI, and weather data (default 10 years, cached for performance).
+      - **Forecasting Tab**: ARIMA-based forecasting of NDVI and weather conditions (default 6 months).
+    - Use "Clear/Reset" to reset the map and results.
+
+7. **Future Section**: View sample bar charts for health trends and risk levels (integrates with analysis results).
+
+8. **Footer**: Click "Be part of the solution" to return to the explore section.
 
 ### 5. Testing
+- **Authentication**: Test user registration, login, and JWT token validation.
 - **Basic Map**: Ensure the map loads with base layers.
 - **Drawing**: Verify polygon drawing and editing work.
-- **API Calls**: Test `/analyze` endpoint with sample GeoJSON via Postman or curl.
-  Example:
+- **API Calls**: Test authenticated endpoints with sample GeoJSON via Postman or curl.
+  Example analysis request:
   ```
   curl -X POST http://localhost:5000/analyze \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{"geometry": {"type": "Polygon", "coordinates": [[[0,0],[0,1],[1,1],[1,0],[0,0]]]}}'
   ```
 - **GEE**: Ensure authentication works; check console for errors.
-- **Weather**: Test `/weather/<lat>/<lon>` endpoint.
+- **Weather**: Test `/weather/<lat>/<lon>` and forecast endpoints.
+- **Historical Data**: Test historical NDVI, EVI, SAVI, and weather endpoints.
+- **Forecasting**: Test NDVI and weather forecasting with cached model performance.
+- **Database**: Run included test files (`test_auth.py`, `test_db.py`, etc.) to verify database operations.
 
 ### 6. Troubleshooting
 - **GEE Errors**: Verify service account has Earth Engine access. Run `python -c "import ee; ee.Authenticate();"` for testing.
@@ -184,7 +226,10 @@ LandCare/
 ### 7. Development
 - Backend: Use `FLASK_ENV=development` for debug mode.
 - Frontend: Edit JS/CSS and refresh the browser.
-- Add features: Enhance GEE processing (e.g., time-series NDVI), add user auth, deploy to cloud.
+- Authentication: JWT-based user system with secure password hashing.
+- Caching: Historical data and ML models cached for performance (30-day and 7-day expiration respectively).
+- Testing: Run authentication and database tests with provided test files.
+- Add features: Enhance forecasting models, add more vegetation indices, implement real-time monitoring.
 
 ### 8. Deployment
 - **Backend**: Deploy Flask to Heroku, Vercel, or Google Cloud Run. Set env vars securely.
@@ -200,8 +245,11 @@ LandCare/
 ## Author
 Peter Kamau Mwaura
 
-GitHub: [@Phitah02](https://github.com/Phitah02)  
+GitHub: [@Phitah02](https://github.com/Phitah02)
 LinkedIn: [Peter Kamau Mwaura](https://www.linkedin.com/in/peter-kamau-mwaura-aa748b241)
+
+## Last Updated
+12th November 2025
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
