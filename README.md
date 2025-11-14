@@ -70,7 +70,7 @@ LandCare/
 │   │   └── map-handler.js     # Leaflet map handling and drawing
 │   └── assets/                # Images, icons, and favicons
 ├── database/
-│   └── schema.sql             # Supabase database schema
+│   └── landcare_public_schema.sql             # Supabase database schema
 ├── .env.example               # Environment variables template
 ├── .gitignore                 # Git ignore rules
 ├── LICENSE                    # MIT License
@@ -80,14 +80,22 @@ LandCare/
 
 ## Database Schema
 
-The application uses Supabase with the following tables:
+The application uses Supabase with the following tables (prefixed with `landcare_` in the public schema):
 
 - **users**: User accounts with email/password authentication
-- **analyses**: User analysis results (NDVI, land cover, weather, geometry)
-- **historical_data**: Cached historical NDVI, EVI, SAVI, and weather data
+  - Fields: id (UUID), email (TEXT, unique), password_hash (TEXT), created_at (TIMESTAMP), updated_at (TIMESTAMP)
+- **analyses**: User analysis results including vegetation indices, land cover, slope, area, weather, and risk assessment
+  - Fields: id (UUID), user_id (TEXT), geometry (JSONB), ndvi (DECIMAL), evi (DECIMAL), savi (DECIMAL), land_cover (JSONB), slope (DECIMAL), area_hectares (DECIMAL), weather (JSONB), risk_assessment (JSONB), created_at (TIMESTAMP)
+- **historical_data**: Historical NDVI, EVI, SAVI, and weather data for user analyses
+  - Fields: id (UUID), user_id (TEXT), geometry (JSONB), latitude (DECIMAL), longitude (DECIMAL), data_type (TEXT), dates (JSONB), values (JSONB), temperature (JSONB), rainfall (JSONB), created_at (TIMESTAMP)
 - **forecasts**: ARIMA forecasting results for vegetation and weather
+  - Fields: id (UUID), user_id (TEXT), geometry (JSONB), forecast_type (TEXT), forecast_data (JSONB), forecast_dates (JSONB), forecast_values (JSONB), model_info (TEXT), created_at (TIMESTAMP)
 - **cached_historical_data**: Performance cache for historical data (30-day expiration)
+  - Fields: id (UUID), data_type (TEXT), geometry_hash (TEXT), latitude (DECIMAL), longitude (DECIMAL), years (INTEGER), data (JSONB), created_at (TIMESTAMP)
 - **cached_models**: Cached ARIMA models for forecasting (7-day expiration)
+  - Fields: id (UUID), model_key (TEXT), model_type (TEXT), model_data (TEXT), model_info (JSONB), created_at (TIMESTAMP)
+
+Row Level Security (RLS) is enabled on all tables except users, with policies ensuring users can only access their own data. Indexes are created for optimal query performance.
 
 ## Setup Instructions
 
@@ -249,7 +257,7 @@ GitHub: [@Phitah02](https://github.com/Phitah02)
 LinkedIn: [Peter Kamau Mwaura](https://www.linkedin.com/in/peter-kamau-mwaura-aa748b241)
 
 ## Last Updated
-12th November 2025
+15th November 2024
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
