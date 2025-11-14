@@ -364,13 +364,16 @@ class LandCareApp {
             if (areaEl) areaEl.textContent = `${results.area_hectares} ha`;
         }
 
+        // Update polygon color based on NDVI (vegetation index)
+        if (results.ndvi && results.ndvi.NDVI !== undefined) {
+            this.mapHandler.updatePolygonVegetationColor(results.ndvi.NDVI);
+        }
+
         // Update risk tag on polygon
         if (results.risk_assessment && results.risk_assessment.risk_level) {
             const riskLevel = results.risk_assessment.risk_level;
             const riskScore = results.risk_assessment.overall_risk_score;
             this.mapHandler.updatePolygonRiskTag(riskLevel, riskScore);
-
-            // Polygon color is now updated in map-handler.js updatePolygonRiskTag method
         }
 
         // Update detailed land cover types

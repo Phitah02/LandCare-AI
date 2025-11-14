@@ -201,6 +201,33 @@ class MapHandler {
         }
     }
 
+    updatePolygonVegetationColor(ndviValue) {
+        if (!this.currentPolygonLayer) return;
+
+        // Determine color based on NDVI value (matching the legend)
+        let vegetationColor = '#d32f2f'; // Default: Very Low Vegetation (<0.2) - red
+
+        if (ndviValue >= 0.8) {
+            vegetationColor = '#388e3c'; // High Vegetation (0.8+) - dark green
+        } else if (ndviValue >= 0.6) {
+            vegetationColor = '#4caf50'; // Good Vegetation (0.6-0.8) - green
+        } else if (ndviValue >= 0.4) {
+            vegetationColor = '#ffc107'; // Moderate Vegetation (0.4-0.6) - yellow
+        } else if (ndviValue >= 0.2) {
+            vegetationColor = '#ff9800'; // Low Vegetation (0.2-0.4) - orange
+        }
+        // ndviValue < 0.2 remains #d32f2f (red)
+
+        // Update polygon color based on vegetation index
+        if (this.currentPolygonLayer) {
+            this.currentPolygonLayer.setStyle({
+                color: vegetationColor,
+                fillColor: vegetationColor,
+                fillOpacity: 0.3
+            });
+        }
+    }
+
     updatePolygonRiskTag(riskLevel, riskScore) {
         if (!this.currentPolygonLayer) return;
 
@@ -224,15 +251,6 @@ class MapHandler {
             iconSize: [140, 70],
             iconAnchor: [70, 35]
         });
-
-        // Update polygon color based on risk level
-        if (this.currentPolygonLayer) {
-            this.currentPolygonLayer.setStyle({
-                color: riskColor,
-                fillColor: riskColor,
-                fillOpacity: 0.3
-            });
-        }
 
         // Calculate centroid for tag placement
         const centroid = this.getPolygonCentroid(this.currentPolygonLayer.toGeoJSON().geometry);
