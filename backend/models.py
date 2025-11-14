@@ -16,6 +16,7 @@ class Database:
             print("Warning: Supabase not configured. Database functionality disabled.")
         else:
             self.client: Client = create_client(Config.SUPABASE_URL, Config.SUPABASE_KEY)
+            self.schema = 'public'  # Use public schema with landcare_ prefixed tables
 
     def save_analysis(self, user_id: str, geometry: dict, results: dict):
         """Save analysis results to database."""
@@ -30,7 +31,7 @@ class Database:
                 'weather': json.dumps(results.get('weather', {})),
                 'created_at': datetime.utcnow().isoformat()
             }
-            return self.client.table('analyses').insert(data).execute()
+            return self.client.table('landcare_analyses').insert(data).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None
@@ -38,7 +39,7 @@ class Database:
     def get_user_analyses(self, user_id: str, limit: int = 10):
         """Get user's analysis history."""
         try:
-            return self.client.table('analyses').select('*').eq('user_id', user_id).order('created_at', descending=True).limit(limit).execute()
+            return self.client.table('landcare_analyses').select('*').eq('user_id', user_id).order('created_at', descending=True).limit(limit).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None
@@ -55,7 +56,7 @@ class Database:
                 'created_at': datetime.utcnow().isoformat(),
                 'updated_at': datetime.utcnow().isoformat()
             }
-            result = self.client.table('users').insert(data).execute()
+            result = self.client.table('landcare_users').insert(data).execute()
             return result.data[0] if result.data else None
         except Exception as e:
             print(f"Database error: {e}")
@@ -64,7 +65,7 @@ class Database:
     def authenticate_user(self, email: str, password: str):
         """Authenticate user and return user data if valid."""
         try:
-            result = self.client.table('users').select('*').eq('email', email).execute()
+            result = self.client.table('landcare_users').select('*').eq('email', email).execute()
             if result.data:
                 user = result.data[0]
                 # Check password
@@ -78,7 +79,7 @@ class Database:
     def user_exists(self, email: str):
         """Check if a user with the given email already exists."""
         try:
-            result = self.client.table('users').select('id').eq('email', email).execute()
+            result = self.client.table('landcare_users').select('id').eq('email', email).execute()
             return len(result.data) > 0
         except Exception as e:
             print(f"Database error: {e}")
@@ -87,7 +88,7 @@ class Database:
     def get_user_by_id(self, user_id: str):
         """Get user by ID."""
         try:
-            result = self.client.table('users').select('id, email, created_at, updated_at').eq('id', user_id).execute()
+            result = self.client.table('landcare_users').select('id, email, created_at, updated_at').eq('id', user_id).execute()
             return result.data[0] if result.data else None
         except Exception as e:
             print(f"Database error: {e}")
@@ -101,7 +102,7 @@ class Database:
                 'email': email,
                 'created_at': datetime.utcnow().isoformat()
             }
-            return self.client.table('users').upsert(data).execute()
+            return self.client.table('landcare_users').upsert(data).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None
@@ -117,7 +118,7 @@ class Database:
                 'values': json.dumps(historical_data.get('ndvi_values', [])),
                 'created_at': datetime.utcnow().isoformat()
             }
-            return self.client.table('historical_data').insert(data).execute()
+            return self.client.table('landcare_historical_data').insert(data).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None
@@ -133,7 +134,7 @@ class Database:
                 'values': json.dumps(historical_data.get('evi_values', [])),
                 'created_at': datetime.utcnow().isoformat()
             }
-            return self.client.table('historical_data').insert(data).execute()
+            return self.client.table('landcare_historical_data').insert(data).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None
@@ -149,7 +150,7 @@ class Database:
                 'values': json.dumps(historical_data.get('savi_values', [])),
                 'created_at': datetime.utcnow().isoformat()
             }
-            return self.client.table('historical_data').insert(data).execute()
+            return self.client.table('landcare_historical_data').insert(data).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None
@@ -167,7 +168,7 @@ class Database:
                 'rainfall': json.dumps(historical_data.get('rainfall', [])),
                 'created_at': datetime.utcnow().isoformat()
             }
-            return self.client.table('historical_data').insert(data).execute()
+            return self.client.table('landcare_historical_data').insert(data).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None
@@ -175,7 +176,7 @@ class Database:
     def get_historical_data(self, user_id: str, data_type: str, limit: int = 5):
         """Get user's historical data."""
         try:
-            return self.client.table('historical_data').select('*').eq('user_id', user_id).eq('data_type', data_type).order('created_at', descending=True).limit(limit).execute()
+            return self.client.table('landcare_historical_data').select('*').eq('user_id', user_id).eq('data_type', data_type).order('created_at', descending=True).limit(limit).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None
@@ -192,7 +193,7 @@ class Database:
                 'model_info': forecast_data.get('model_info', ''),
                 'created_at': datetime.utcnow().isoformat()
             }
-            return self.client.table('forecasts').insert(data).execute()
+            return self.client.table('landcare_forecasts').insert(data).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None
@@ -200,7 +201,7 @@ class Database:
     def get_forecasts(self, user_id: str, limit: int = 5):
         """Get user's forecast history."""
         try:
-            return self.client.table('forecasts').select('*').eq('user_id', user_id).order('created_at', descending=True).limit(limit).execute()
+            return self.client.table('landcare_forecasts').select('*').eq('user_id', user_id).order('created_at', descending=True).limit(limit).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None
@@ -211,7 +212,7 @@ class Database:
             # Calculate expiration time (30 days)
             expiration_time = datetime.utcnow() - timedelta(days=30)
 
-            query = self.client.table('cached_historical_data').select('*') \
+            query = self.client.table('landcare_cached_historical_data').select('*') \
                 .eq('data_type', data_type) \
                 .eq('geometry_hash', geometry_hash) \
                 .eq('years', years) \
@@ -244,7 +245,7 @@ class Database:
                 'data': json.dumps(data),
                 'created_at': datetime.utcnow().isoformat()
             }
-            return self.client.table('cached_historical_data').insert(cache_data).execute()
+            return self.client.table('landcare_cached_historical_data').insert(cache_data).execute()
         except Exception as e:
             print(f"Cache save error: {e}")
             return None
@@ -255,7 +256,7 @@ class Database:
             # Calculate expiration time (7 days for models)
             expiration_time = datetime.utcnow() - timedelta(days=7)
 
-            result = self.client.table('cached_models').select('*') \
+            result = self.client.table('landcare_cached_models').select('*') \
                 .eq('model_key', model_key) \
                 .gt('created_at', expiration_time.isoformat()) \
                 .order('created_at', descending=True).limit(1).execute()
@@ -289,7 +290,7 @@ class Database:
                 'model_info': json.dumps(model_info),
                 'created_at': datetime.utcnow().isoformat()
             }
-            return self.client.table('cached_models').insert(cache_data).execute()
+            return self.client.table('landcare_cached_models').insert(cache_data).execute()
         except Exception as e:
             print(f"Model cache save error: {e}")
             return None
@@ -303,7 +304,7 @@ class Database:
                 'forecast_data': json.dumps(forecast_data),
                 'created_at': datetime.utcnow().isoformat()
             }
-            return self.client.table('forecasts').insert(data).execute()
+            return self.client.table('landcare_forecasts').insert(data).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None
@@ -314,12 +315,12 @@ class Database:
             expiration_time = datetime.utcnow() - timedelta(days=days)
 
             # Clear historical data cache
-            self.client.table('cached_historical_data').delete() \
+            self.client.table('landcare_cached_historical_data').delete() \
                 .lt('created_at', expiration_time.isoformat()).execute()
 
             # Clear model cache (shorter expiration)
             model_expiration = datetime.utcnow() - timedelta(days=7)
-            self.client.table('cached_models').delete() \
+            self.client.table('landcare_cached_models').delete() \
                 .lt('created_at', model_expiration.isoformat()).execute()
 
             return True
