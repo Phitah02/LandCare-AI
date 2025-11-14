@@ -1,16 +1,18 @@
-# TODO: Convert Land Cover to km² Units
+# LandCare AI Streamlit Dashboard Enhancement
 
-## Tasks
-- [ ] Update backend to convert pixel counts to km²
-- [ ] Modify frontend display to show km² instead of pixel counts
-- [ ] Add unit labels (km²) to land cover values
-- [ ] Include tooltips explaining area calculation
-- [ ] Round values to 2 decimal places
-- [ ] Add percentage of total polygon area
-- [ ] Validate total area matches polygon size
+## Current Status
+- [x] Basic authentication (login/signup)
+- [x] Interactive map with polygon drawing
+- [x] Real-time analysis (NDVI, EVI, SAVI, land cover, slope, weather, risk assessment)
+- [x] Statistics and Risk Analysis tabs
+- [x] Added Historical Analysis tab with vegetation and weather trends
+- [x] Added Forecasting tab for NDVI and weather predictions
+- [x] Implemented backend calls for historical data endpoints
+- [x] Implemented backend calls for forecasting endpoints
+- [x] Added Plotly charts for data visualization
+- [x] Created requirements.txt with plotly dependency
 
-## Details
-- Formula: Area (km²) = Pixel Count × (Resolution² / 1,000,000)
-- Resolution: 10m → 0.0001 km² per pixel
-- Display format: "Forest: 12.50 km² (25.3%)"
-- Target section: Statistics tab land cover summary
+## Pending Tasks
+- [x] Install required dependencies (plotly, pandas)
+- [x] Test the Streamlit app with backend running
+- [ ] Verify charts and data loading
