@@ -21,12 +21,33 @@ class Database:
     def save_analysis(self, user_id: str, geometry: dict, results: dict):
         """Save analysis results to database."""
         try:
+            # Extract NDVI value - handle both dict and direct value formats
+            ndvi_data = results.get('ndvi', {})
+            if isinstance(ndvi_data, dict):
+                ndvi_value = ndvi_data.get('NDVI')
+            else:
+                ndvi_value = ndvi_data
+
+            # Extract EVI value
+            evi_data = results.get('evi', {})
+            if isinstance(evi_data, dict):
+                evi_value = evi_data.get('EVI')
+            else:
+                evi_value = evi_data
+
+            # Extract SAVI value
+            savi_data = results.get('savi', {})
+            if isinstance(savi_data, dict):
+                savi_value = savi_data.get('SAVI')
+            else:
+                savi_value = savi_data
+
             data = {
                 'user_id': user_id,
                 'geometry': json.dumps(geometry),
-                'ndvi': results.get('ndvi', {}).get('NDVI'),
-                'evi': results.get('evi', {}).get('EVI'),
-                'savi': results.get('savi', {}).get('SAVI'),
+                'ndvi': ndvi_value,
+                'evi': evi_value,
+                'savi': savi_value,
                 'land_cover': json.dumps(results.get('land_cover', {})),
                 'weather': json.dumps(results.get('weather', {})),
                 'created_at': datetime.utcnow().isoformat()
