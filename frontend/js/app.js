@@ -259,6 +259,8 @@ class LandCareApp {
         }
 
         // Historical and Forecasting buttons will be attached after tabs are created
+        this.attachHistoricalButtons();
+        this.attachForecastingButtons();
 
         // Theme toggle button
         const themeToggle = document.getElementById('theme-toggle');
@@ -693,9 +695,47 @@ class LandCareApp {
     }
 
     initFutureCharts() {
-        // Placeholder for future chart initialization
-        // Will be called when forecasting data is available
-        console.log('Future charts initialized');
+        // Initialize Chart.js if available
+        if (typeof Chart !== 'undefined') {
+            this.chartInstances = {};
+            console.log('Chart.js initialized');
+        } else {
+            console.log('Chart.js not available, charts disabled');
+        }
+    }
+
+    attachHistoricalButtons() {
+        // Attach event listeners for historical data buttons
+        const historicalNdviBtn = document.getElementById('historical-ndvi');
+        if (historicalNdviBtn) {
+            historicalNdviBtn.addEventListener('click', () => {
+                this.loadHistoricalNDVI();
+            });
+        }
+
+        const historicalWeatherBtn = document.getElementById('historical-weather');
+        if (historicalWeatherBtn) {
+            historicalWeatherBtn.addEventListener('click', () => {
+                this.loadHistoricalWeather();
+            });
+        }
+    }
+
+    attachForecastingButtons() {
+        // Attach event listeners for forecasting buttons
+        const forecastNdviBtn = document.getElementById('forecast-ndvi');
+        if (forecastNdviBtn) {
+            forecastNdviBtn.addEventListener('click', () => {
+                this.forecastNDVI();
+            });
+        }
+
+        const forecastWeatherBtn = document.getElementById('forecast-weather');
+        if (forecastWeatherBtn) {
+            forecastWeatherBtn.addEventListener('click', () => {
+                this.forecastWeather();
+            });
+        }
     }
 
     checkConnectionStatus() {
@@ -958,6 +998,728 @@ class LandCareApp {
             warningDiv.appendChild(warningIcon);
             warningDiv.appendChild(warningText);
             earlyWarningsEl.appendChild(warningDiv);
+        });
+    }
+
+    async loadHistoricalNDVI() {
+        if (!this.authToken) {
+            this.showError('You must be logged in to access historical data');
+            this.openAuthModal(true);
+            return;
+        }
+
+        if (!this.mapHandler.currentPolygon) {
+            this.showError('No polygon drawn. Please draw a polygon first.');
+            return;
+        }
+
+        try {
+            const geometry = this.mapHandler.currentPolygonLayer.toGeoJSON().geometry;
+            const months = parseInt(document.getElementById('historical-months-select')?.value) || 12; // Get from UI or default to 12
+
+            const response = await fetch('http://localhost:5000/historical/vis', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.authToken}`
+                },
+                body: JSON.stringify({
+                    geometry: geometry,
+                    months: months
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to load historical NDVI');
+            }
+
+            this.displayHistoricalNDVI(data);
+            this.showSuccess('Historical VIs data loaded successfully!');
+        } catch (error) {
+            this.showError(`Historical NDVI error: ${error.message}`);
+            console.error('Historical NDVI error:', error);
+        }
+    }
+
+    async loadHistoricalWeather() {
+        if (!this.authToken) {
+            this.showError('You must be logged in to access historical data');
+            this.openAuthModal(true);
+            return;
+        }
+
+        if (!this.mapHandler.currentPolygon) {
+            this.showError('No polygon drawn. Please draw a polygon first.');
+            return;
+        }
+
+        try {
+            const centroid = this.mapHandler.getPolygonCentroid(this.mapHandler.currentPolygonLayer.toGeoJSON().geometry);
+            const days = parseInt(document.getElementById('historical-days-select')?.value) || 5; // Get from UI or default to 5
+
+            const response = await fetch(`http://localhost:5000/historical/weather/${centroid[0]}/${centroid[1]}?days=${days}`, {
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`
+                }
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to load historical weather');
+            }
+
+            this.displayHistoricalWeather(data);
+            this.showSuccess('Historical weather data loaded successfully!');
+        } catch (error) {
+            this.showError(`Historical weather error: ${error.message}`);
+            console.error('Historical weather error:', error);
+        }
+    }
+
+    async forecastNDVI() {
+        if (!this.authToken) {
+            this.showError('You must be logged in to perform forecasting');
+            this.openAuthModal(true);
+            return;
+        }
+
+        if (!this.mapHandler.currentPolygon) {
+            this.showError('No polygon drawn. Please draw a polygon first.');
+            return;
+        }
+
+        try {
+            // First get historical data for forecasting
+            const geometry = this.mapHandler.currentPolygonLayer.toGeoJSON().geometry;
+            const historicalMonths = parseInt(document.getElementById('forecast-historical-months-select')?.value) || 12;
+            const historicalResponse = await fetch('http://localhost:5000/historical/vis', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.authToken}`
+                },
+                body: JSON.stringify({
+                    geometry: geometry,
+                    months: historicalMonths  // Use selected months for forecasting
+                })
+            });
+
+            const historicalData = await historicalResponse.json();
+            if (!historicalResponse.ok) {
+                throw new Error('Failed to get historical data for forecasting');
+            }
+
+            // Now forecast
+            const months = parseInt(document.getElementById('forecast-months-select')?.value) || 12; // Get from UI or default to 12
+            const forecastResponse = await fetch('http://localhost:5000/forecast/vis', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.authToken}`
+                },
+                body: JSON.stringify({
+                    historical_ndvi: historicalData,
+                    months: months,
+                    geometry: geometry
+                })
+            });
+
+            const forecastData = await forecastResponse.json();
+            if (!forecastResponse.ok) {
+                throw new Error(forecastData.error || 'Forecasting failed');
+            }
+
+            this.displayNDVIForecast(forecastData);
+            this.showSuccess('VIs forecast completed successfully!');
+        } catch (error) {
+            this.showError(`NDVI forecast error: ${error.message}`);
+            console.error('NDVI forecast error:', error);
+        }
+    }
+
+    async forecastWeather() {
+        if (!this.authToken) {
+            this.showError('You must be logged in to perform forecasting');
+            this.openAuthModal(true);
+            return;
+        }
+
+        if (!this.mapHandler.currentPolygon) {
+            this.showError('No polygon drawn. Please draw a polygon first.');
+            return;
+        }
+
+        try {
+            const centroid = this.mapHandler.getPolygonCentroid(this.mapHandler.currentPolygonLayer.toGeoJSON().geometry);
+            const days = parseInt(document.getElementById('forecast-days-select')?.value) || 5; // Get from UI or default to 5
+
+            const response = await fetch(`http://localhost:5000/forecast/weather/${centroid[0]}/${centroid[1]}?days=${days}`, {
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`
+                }
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Weather forecasting failed');
+            }
+
+            this.displayWeatherForecast(data);
+            this.showSuccess('Weather forecast completed successfully!');
+        } catch (error) {
+            this.showError(`Weather forecast error: ${error.message}`);
+            console.error('Weather forecast error:', error);
+        }
+    }
+
+    displayHistoricalNDVI(data) {
+        // Switch to historical tab and display data
+        this.switchToTab('historical');
+
+        // Update statistics
+        if (data.metadata) {
+            document.getElementById('historical-data-points').textContent = data.metadata.data_points || data.ndvi_values.length;
+            document.getElementById('historical-time-range').textContent = `${data.metadata.period_months} months`;
+            document.getElementById('historical-trend').textContent = data.metadata.trend || 'N/A';
+        }
+
+        // Display statistics if available
+        if (data.statistics) {
+            console.log('NDVI Statistics:', data.statistics);
+        }
+
+        this.renderTimeSeriesChart('historical-ndvi-chart', data.dates, data.ndvi_values, 'VIs', 'Historical VIs');
+    }
+
+    displayHistoricalWeather(data) {
+        // Switch to historical tab and display data
+        this.switchToTab('historical');
+
+        // Update statistics
+        if (data.metadata) {
+            document.getElementById('historical-data-points').textContent = data.metadata.data_points || (data.data ? data.data.length : 'N/A');
+            document.getElementById('historical-time-range').textContent = `${data.metadata.period_days} days`;
+            document.getElementById('historical-trend').textContent = data.metadata.precipitation_trend || 'N/A';
+        }
+
+        // Display statistics if available
+        if (data.statistics) {
+            console.log('Weather Statistics:', data.statistics);
+        }
+
+        // Handle new data format with daily summaries
+        if (data.data && Array.isArray(data.data)) {
+            const dates = data.data.map(day => day.date);
+            const temperatures = data.data.map(day => day.temperature);
+            const humidities = data.data.map(day => day.humidity);
+            const precipitations = data.data.map(day => day.precipitation);
+
+            // Display temperature and precipitation
+            this.renderDualTimeSeriesChart('historical-weather-chart', dates, temperatures, precipitations, 'Temperature (°C)', 'Precipitation (mm)');
+        } else {
+            // Fallback to old format
+            this.renderDualTimeSeriesChart('historical-weather-chart', data.dates, data.temperature, data.rainfall, 'Temperature (°C)', 'Rainfall (mm)');
+        }
+    }
+
+    displayNDVIForecast(data) {
+        // Switch to forecasting tab and display data
+        this.switchToTab('forecasting');
+
+        // Update forecast info
+        if (data.metadata) {
+            document.getElementById('forecast-period').textContent = `${data.metadata.parameters.periods} months`;
+            document.getElementById('forecast-model').textContent = data.metadata.model;
+            document.getElementById('forecast-confidence').textContent = data.metadata.parameters.confidence_intervals ? '95%' : 'N/A';
+        }
+
+        this.renderForecastChart('forecast-ndvi-chart', data.forecast_dates, data.forecast_values, data.confidence_intervals, 'VIs Forecast');
+    }
+
+    displayWeatherForecast(data) {
+        // Switch to forecasting tab and display data
+        this.switchToTab('forecasting');
+
+        // Update forecast info
+        if (data.metadata) {
+            document.getElementById('forecast-period').textContent = `${data.metadata.forecast_period_days} days`;
+            document.getElementById('forecast-model').textContent = 'ARIMA/SARIMA';
+            document.getElementById('forecast-confidence').textContent = 'Simple bounds';
+        }
+
+        // Handle new data format with uncertainty bands
+        if (data.temperature && data.temperature.values) {
+            // New format with uncertainty
+            this.renderWeatherForecastChartWithUncertainty('forecast-weather-chart', data.forecast_dates,
+                data.temperature, data.precipitation, data.humidity);
+        } else {
+            // Fallback to old format
+            this.renderWeatherForecastChart('forecast-weather-chart', data.forecast_dates,
+                data.temperature_forecast, data.precipitation_forecast);
+        }
+    }
+
+    switchToTab(tabName) {
+        // Switch to the specified tab
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        tabButtons.forEach((button, index) => {
+            if (button.textContent.toLowerCase().includes(tabName)) {
+                button.classList.add('active');
+                if (tabContents[index]) {
+                    tabContents[index].style.display = 'block';
+                }
+            } else {
+                button.classList.remove('active');
+                if (tabContents[index]) {
+                    tabContents[index].style.display = 'none';
+                }
+            }
+        });
+    }
+
+    renderTimeSeriesChart(canvasId, dates, values, label, title) {
+        if (!this.chartInstances) return;
+
+        // Destroy existing chart if it exists
+        if (this.chartInstances[canvasId]) {
+            this.chartInstances[canvasId].destroy();
+        }
+
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+
+        this.chartInstances[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [{
+                    label: label,
+                    data: values,
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: title
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: label
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    renderDualTimeSeriesChart(canvasId, dates, tempValues, rainValues, tempLabel, rainLabel) {
+        if (!this.chartInstances) return;
+
+        // Destroy existing chart if it exists
+        if (this.chartInstances[canvasId]) {
+            this.chartInstances[canvasId].destroy();
+        }
+
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+
+        this.chartInstances[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [{
+                    label: tempLabel,
+                    data: tempValues,
+                    borderColor: 'rgb(255, 99, 132)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    yAxisID: 'y',
+                    tension: 0.1
+                }, {
+                    label: rainLabel,
+                    data: rainValues,
+                    borderColor: 'rgb(54, 162, 235)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    yAxisID: 'y1',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                stacked: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Historical Weather Data'
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: tempLabel
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: rainLabel
+                        },
+                        grid: {
+                            drawOnChartArea: false,
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    renderForecastChart(canvasId, dates, values, confidenceIntervals, title) {
+        if (!this.chartInstances) return;
+
+        // Destroy existing chart if it exists
+        if (this.chartInstances[canvasId]) {
+            this.chartInstances[canvasId].destroy();
+        }
+
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+
+        const datasets = [{
+            label: 'Forecast',
+            data: values,
+            borderColor: 'rgb(255, 159, 64)',
+            backgroundColor: 'rgba(255, 159, 64, 0.2)',
+            tension: 0.1
+        }];
+
+        // Add confidence intervals if available
+        if (confidenceIntervals && confidenceIntervals.lower && confidenceIntervals.upper) {
+            datasets.push({
+                label: 'Confidence Lower',
+                data: confidenceIntervals.lower,
+                borderColor: 'rgba(255, 159, 64, 0.3)',
+                backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                fill: false,
+                tension: 0.1,
+                pointRadius: 0
+            });
+            datasets.push({
+                label: 'Confidence Upper',
+                data: confidenceIntervals.upper,
+                borderColor: 'rgba(255, 159, 64, 0.3)',
+                backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                fill: '-1', // Fill to previous dataset
+                tension: 0.1,
+                pointRadius: 0
+            });
+        }
+
+        this.chartInstances[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: title
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'NDVI'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    renderWeatherForecastChart(canvasId, dates, tempValues, rainValues) {
+        if (!this.chartInstances) return;
+
+        // Destroy existing chart if it exists
+        if (this.chartInstances[canvasId]) {
+            this.chartInstances[canvasId].destroy();
+        }
+
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+
+        this.chartInstances[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [{
+                    label: 'Temperature Forecast (°C)',
+                    data: tempValues,
+                    borderColor: 'rgb(255, 99, 132)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    yAxisID: 'y',
+                    tension: 0.1
+                }, {
+                    label: 'Precipitation Forecast (mm)',
+                    data: rainValues,
+                    borderColor: 'rgb(54, 162, 235)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    yAxisID: 'y1',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                stacked: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Weather Forecast'
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Temperature (°C)'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Precipitation (mm)'
+                        },
+                        grid: {
+                            drawOnChartArea: false,
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    renderWeatherForecastChartWithUncertainty(canvasId, dates, temperature, precipitation, humidity) {
+        if (!this.chartInstances) return;
+
+        // Destroy existing chart if it exists
+        if (this.chartInstances[canvasId]) {
+            this.chartInstances[canvasId].destroy();
+        }
+
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+
+        const datasets = [];
+
+        // Temperature with uncertainty
+        if (temperature && temperature.values) {
+            datasets.push({
+                label: 'Temperature (°C)',
+                data: temperature.values,
+                borderColor: 'rgb(255, 99, 132)',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                yAxisID: 'y',
+                tension: 0.1
+            });
+
+            // Temperature uncertainty bands
+            if (temperature.upper_bound && temperature.lower_bound) {
+                datasets.push({
+                    label: 'Temp Upper Bound',
+                    data: temperature.upper_bound,
+                    borderColor: 'rgba(255, 99, 132, 0.3)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                    fill: false,
+                    pointRadius: 0,
+                    tension: 0.1
+                });
+                datasets.push({
+                    label: 'Temp Lower Bound',
+                    data: temperature.lower_bound,
+                    borderColor: 'rgba(255, 99, 132, 0.3)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                    fill: '-1', // Fill to previous dataset
+                    pointRadius: 0,
+                    tension: 0.1
+                });
+            }
+        }
+
+        // Precipitation with uncertainty
+        if (precipitation && precipitation.values) {
+            datasets.push({
+                label: 'Precipitation (mm)',
+                data: precipitation.values,
+                borderColor: 'rgb(54, 162, 235)',
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                yAxisID: 'y1',
+                tension: 0.1
+            });
+
+            // Precipitation uncertainty bands
+            if (precipitation.upper_bound && precipitation.lower_bound) {
+                datasets.push({
+                    label: 'Precip Upper Bound',
+                    data: precipitation.upper_bound,
+                    borderColor: 'rgba(54, 162, 235, 0.3)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                    fill: false,
+                    pointRadius: 0,
+                    tension: 0.1
+                });
+                datasets.push({
+                    label: 'Precip Lower Bound',
+                    data: precipitation.lower_bound,
+                    borderColor: 'rgba(54, 162, 235, 0.3)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                    fill: false,
+                    pointRadius: 0,
+                    tension: 0.1
+                });
+            }
+        }
+
+        // Humidity with uncertainty (optional)
+        if (humidity && humidity.values) {
+            datasets.push({
+                label: 'Humidity (%)',
+                data: humidity.values,
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                yAxisID: 'y2',
+                tension: 0.1
+            });
+        }
+
+        this.chartInstances[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                stacked: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Weather Forecast with Uncertainty'
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Temperature (°C)'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Precipitation (mm)'
+                        },
+                        grid: {
+                            drawOnChartArea: false,
+                        }
+                    },
+                    y2: {
+                        type: 'linear',
+                        display: false, // Hide humidity axis by default
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Humidity (%)'
+                        },
+                        grid: {
+                            drawOnChartArea: false,
+                        }
+                    }
+                }
+            }
         });
     }
 

@@ -496,6 +496,60 @@ button:disabled {
     display: block;
 }
 
+/* Historical and Forecasting Styles */
+.historical-controls, .forecasting-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.control-group label {
+    font-weight: 500;
+    color: var(--text-color);
+    white-space: nowrap;
+}
+
+.control-group select {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--panel-bg);
+    color: var(--text-color);
+    font-size: 0.9rem;
+    min-width: 80px;
+}
+
+.control-group select:focus {
+    outline: none;
+    border-color: var(--button-bg);
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.chart-container {
+    margin: 20px 0;
+}
+
+.chart-container canvas {
+    max-width: 100%;
+    height: auto;
+    margin-bottom: 20px;
+}
+
+.historical-stats, .forecast-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+
 .basic-statistics {
     background: var(--panel-bg);
     padding: 1rem;

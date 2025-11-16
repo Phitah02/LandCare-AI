@@ -201,6 +201,8 @@
                         
                         <div id="results-tabs">
                             <button class="tab-button active" data-tab="overview">Statistics</button>
+                            <button class="tab-button" data-tab="historical">Historical</button>
+                            <button class="tab-button" data-tab="forecasting">Forecasting</button>
                             <button class="tab-button" data-tab="risk">Risk Analysis</button>
                         </div>
                         
@@ -246,6 +248,93 @@
                                 </div>
                             </div>
                             
+                            <div id="historical-tab" class="tab-content">
+                                <h4>Historical Analysis</h4>
+                                <div class="historical-controls">
+                                    <div class="control-group">
+                                        <label for="historical-months-select">VIs Period (months):</label>
+                                        <select id="historical-months-select">
+                                            <option value="3">3 months</option>
+                                            <option value="6">6 months</option>
+                                            <option value="12" selected>12 months</option>
+                                        </select>
+                                        <button id="historical-ndvi" class="btn btn-secondary">Load Historical VIs</button>
+                                    </div>
+                                    <div class="control-group">
+                                        <label for="historical-days-select">Weather Period (days):</label>
+                                        <select id="historical-days-select">
+                                            <option value="3">3 days</option>
+                                            <option value="5" selected>5 days</option>
+                                        </select>
+                                        <button id="historical-weather" class="btn btn-secondary">Load Historical Weather</button>
+                                    </div>
+                                </div>
+                                <div class="chart-container">
+                                    <canvas id="historical-ndvi-chart" width="400" height="200"></canvas>
+                                    <canvas id="historical-weather-chart" width="400" height="200"></canvas>
+                                </div>
+                                <div class="historical-stats">
+                                    <div class="stat-card">
+                                        <h4>Data Points</h4>
+                                        <div class="stat-value" id="historical-data-points">-</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <h4>Time Range</h4>
+                                        <div class="stat-value" id="historical-time-range">-</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <h4>Trend</h4>
+                                        <div class="stat-value" id="historical-trend">-</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="forecasting-tab" class="tab-content">
+                                <h4>Forecasting</h4>
+                                <div class="forecasting-controls">
+                                    <div class="control-group">
+                                        <label for="forecast-historical-months-select">Historical VIs (months):</label>
+                                        <select id="forecast-historical-months-select">
+                                            <option value="6">6 months</option>
+                                            <option value="12" selected>12 months</option>
+                                        </select>
+                                        <label for="forecast-months-select">Forecast Period (months):</label>
+                                        <select id="forecast-months-select">
+                                            <option value="3">3 months</option>
+                                            <option value="6">6 months</option>
+                                            <option value="12" selected>12 months</option>
+                                        </select>
+                                        <button id="forecast-ndvi" class="btn btn-secondary">Forecast VIs</button>
+                                    </div>
+                                    <div class="control-group">
+                                        <label for="forecast-days-select">Forecast Period (days):</label>
+                                        <select id="forecast-days-select">
+                                            <option value="3">3 days</option>
+                                            <option value="5" selected>5 days</option>
+                                        </select>
+                                        <button id="forecast-weather" class="btn btn-secondary">Forecast Weather</button>
+                                    </div>
+                                </div>
+                                <div class="chart-container">
+                                    <canvas id="forecast-ndvi-chart" width="400" height="200"></canvas>
+                                    <canvas id="forecast-weather-chart" width="400" height="200"></canvas>
+                                </div>
+                                <div class="forecast-info">
+                                    <div class="stat-card">
+                                        <h4>Forecast Period</h4>
+                                        <div class="stat-value" id="forecast-period">12 months</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <h4>Model Type</h4>
+                                        <div class="stat-value" id="forecast-model">ARIMA/SARIMA</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <h4>Confidence Level</h4>
+                                        <div class="stat-value" id="forecast-confidence">95%</div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div id="risk-tab" class="tab-content">
                                 <div class="risk-breakdown">
                                     <h4>Risk Factors</h4>
