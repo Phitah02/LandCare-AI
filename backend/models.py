@@ -8,6 +8,8 @@ import base64
 import jwt
 import bcrypt
 from functools import wraps
+import pandas as pd
+import numpy as np
 
 class Database:
     def __init__(self):
@@ -129,14 +131,30 @@ class Database:
             return None
 
     def save_historical_ndvi(self, user_id: str, geometry: dict, historical_data: dict):
-        """Save historical NDVI data."""
+        """Save historical NDVI data with enhanced metadata."""
         try:
+            # Calculate statistics
+            values = historical_data.get('ndvi_values', [])
+            if values:
+                stats = calculate_statistics(values)
+            else:
+                stats = {}
+
             data = {
                 'user_id': user_id,
                 'geometry': json.dumps(geometry),
                 'data_type': 'ndvi',
                 'dates': json.dumps(historical_data.get('dates', [])),
                 'values': json.dumps(historical_data.get('ndvi_values', [])),
+                'normalized_values': json.dumps(normalize_vegetation_data(historical_data.get('ndvi_values', []))),
+                'statistics': json.dumps(stats),
+                'source': 'GEE_Sentinel2',
+                'timestamp': datetime.utcnow().isoformat(),
+                'metadata': json.dumps({
+                    'processing_info': 'Monthly NDVI averages from Sentinel-2',
+                    'spatial_resolution': '10m',
+                    'temporal_resolution': 'monthly'
+                }),
                 'created_at': datetime.utcnow().isoformat()
             }
             return self.client.table('landcare_historical_data').insert(data).execute()
@@ -177,16 +195,35 @@ class Database:
             return None
 
     def save_historical_weather(self, user_id: str, lat: float, lon: float, historical_data: dict):
-        """Save historical weather data."""
+        """Save historical weather data with enhanced metadata and aggregation."""
         try:
+            # Aggregate data (daily/hourly to monthly summaries)
+            dates = historical_data.get('dates', [])
+            temperatures = historical_data.get('temperature', [])
+            rainfall = historical_data.get('rainfall', [])
+
+            # Group by month and calculate aggregates
+            monthly_data = aggregate_weather_data(dates, temperatures, rainfall)
+
             data = {
                 'user_id': user_id,
                 'latitude': lat,
                 'longitude': lon,
                 'data_type': 'weather',
-                'dates': json.dumps(historical_data.get('dates', [])),
-                'temperature': json.dumps(historical_data.get('temperature', [])),
-                'rainfall': json.dumps(historical_data.get('rainfall', [])),
+                'dates': json.dumps(monthly_data.get('dates', [])),
+                'temperature': json.dumps(monthly_data.get('avg_temperature', [])),
+                'rainfall': json.dumps(monthly_data.get('total_rainfall', [])),
+                'statistics': json.dumps({
+                    'temperature_stats': calculate_statistics(monthly_data.get('avg_temperature', [])),
+                    'rainfall_stats': calculate_statistics(monthly_data.get('total_rainfall', []))
+                }),
+                'source': 'ECMWF_ERA5',
+                'timestamp': datetime.utcnow().isoformat(),
+                'metadata': json.dumps({
+                    'processing_info': 'Monthly weather aggregates from ERA5',
+                    'aggregation_method': 'monthly_averages',
+                    'variables': ['temperature', 'total_precipitation']
+                }),
                 'created_at': datetime.utcnow().isoformat()
             }
             return self.client.table('landcare_historical_data').insert(data).execute()
@@ -203,7 +240,7 @@ class Database:
             return None
 
     def save_forecast(self, user_id: str, geometry: dict, forecast_data: dict):
-        """Save forecast results."""
+        """Save forecast results with enhanced metadata."""
         try:
             data = {
                 'user_id': user_id,
@@ -211,7 +248,9 @@ class Database:
                 'forecast_type': forecast_data.get('type', 'ndvi'),
                 'forecast_dates': json.dumps(forecast_data.get('forecast_dates', [])),
                 'forecast_values': json.dumps(forecast_data.get('forecast_values', [])),
-                'model_info': forecast_data.get('model_info', ''),
+                'confidence_intervals': json.dumps(forecast_data.get('confidence_intervals', {})),
+                'model_info': json.dumps(forecast_data.get('model_info', {})),
+                'run_date': datetime.utcnow().isoformat(),
                 'created_at': datetime.utcnow().isoformat()
             }
             return self.client.table('landcare_forecasts').insert(data).execute()
@@ -353,6 +392,82 @@ class Database:
         """Generate a hash for geometry to use as cache key."""
         geometry_str = json.dumps(geometry, sort_keys=True)
         return hashlib.md5(geometry_str.encode()).hexdigest()
+
+# Utility functions for data processing
+def calculate_statistics(values):
+    """Calculate basic statistics for a list of values."""
+    try:
+        if not values:
+            return {}
+        numeric_values = [v for v in values if v is not None and str(v).lower() != 'nan']
+        if not numeric_values:
+            return {}
+
+        return {
+            'mean': float(np.mean(numeric_values)),
+            'median': float(np.median(numeric_values)),
+            'std_dev': float(np.std(numeric_values)),
+            'min': float(np.min(numeric_values)),
+            'max': float(np.max(numeric_values)),
+            'count': len(numeric_values)
+        }
+    except Exception as e:
+        print(f"Statistics calculation error: {e}")
+        return {}
+
+def normalize_vegetation_data(values):
+    """Normalize vegetation index data to 0-1 range."""
+    try:
+        if not values:
+            return []
+        numeric_values = [v for v in values if v is not None and str(v).lower() != 'nan']
+        if not numeric_values:
+            return []
+
+        # Vegetation indices are typically in range -1 to 1, normalize to 0-1
+        min_val = min(numeric_values)
+        max_val = max(numeric_values)
+        if max_val == min_val:
+            return [0.5] * len(numeric_values)  # All same values
+
+        return [(v - min_val) / (max_val - min_val) for v in numeric_values]
+    except Exception as e:
+        print(f"Normalization error: {e}")
+        return values
+
+def aggregate_weather_data(dates, temperatures, rainfall):
+    """Aggregate daily weather data to monthly summaries."""
+    try:
+        if not dates or not temperatures or not rainfall:
+            return {'dates': [], 'avg_temperature': [], 'total_rainfall': []}
+
+        # Create DataFrame
+        df = pd.DataFrame({
+            'date': pd.to_datetime(dates),
+            'temperature': temperatures,
+            'rainfall': rainfall
+        })
+
+        # Group by year-month
+        df['year_month'] = df['date'].dt.to_period('M')
+
+        # Calculate monthly aggregates
+        monthly = df.groupby('year_month').agg({
+            'temperature': 'mean',
+            'rainfall': 'sum'
+        }).reset_index()
+
+        # Format dates as mid-month
+        monthly['date'] = monthly['year_month'].dt.to_timestamp() + pd.offsets.MonthEnd(0) - pd.offsets.MonthBegin(1) + pd.Timedelta(days=14)
+
+        return {
+            'dates': monthly['date'].dt.strftime('%Y-%m-%d').tolist(),
+            'avg_temperature': monthly['temperature'].round(2).tolist(),
+            'total_rainfall': monthly['rainfall'].round(2).tolist()
+        }
+    except Exception as e:
+        print(f"Weather aggregation error: {e}")
+        return {'dates': dates, 'avg_temperature': temperatures, 'total_rainfall': rainfall}
 
 # Global database instance
 db = Database()

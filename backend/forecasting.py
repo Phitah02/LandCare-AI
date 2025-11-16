@@ -7,12 +7,13 @@ import hashlib
 import asyncio
 warnings.filterwarnings("ignore")
 
-def forecast_ndvi(historical_ndvi, periods=12, geometry_hash=None):
+def forecast_ndvi(historical_ndvi, periods=12, geometry_hash=None, use_sarima=False):
     """
-    Forecast NDVI using ARIMA model with caching.
+    Forecast NDVI using ARIMA/SARIMA model with caching and confidence intervals.
     historical_ndvi: dict with 'dates' and 'values' lists
     periods: number of months to forecast
     geometry_hash: hash of geometry for caching
+    use_sarima: whether to use SARIMA instead of ARIMA
     """
     try:
         # Filter out invalid values
@@ -34,7 +35,8 @@ def forecast_ndvi(historical_ndvi, periods=12, geometry_hash=None):
         model_key = None
         if geometry_hash:
             data_hash = hashlib.md5(str(values.values.tolist()).encode()).hexdigest()
-            model_key = f"ndvi_{geometry_hash}_{data_hash}"
+            model_type = 'sarima' if use_sarima else 'arima'
+            model_key = f"ndvi_{model_type}_{geometry_hash}_{data_hash}"
 
         # Try to get cached model
         cached_model = None
@@ -47,35 +49,60 @@ def forecast_ndvi(historical_ndvi, periods=12, geometry_hash=None):
             model_fit = cached_model['model']
             model_info = cached_model['model_info']
         else:
-            # Fit new ARIMA model (p,d,q) - simple (1,1,1)
-            model = ARIMA(values, order=(1,1,1))
-            model_fit = model.fit()
-            model_info = {'order': (1,1,1), 'aic': model_fit.aic}
+            # Fit new model
+            if use_sarima:
+                # SARIMA model with seasonal component (12 months seasonality)
+                from statsmodels.tsa.statespace.sarimax import SARIMAX
+                model = SARIMAX(values, order=(1,1,1), seasonal_order=(1,1,1,12))
+                model_fit = model.fit(disp=False)
+                model_info = {
+                    'model_type': 'SARIMA',
+                    'order': (1,1,1),
+                    'seasonal_order': (1,1,1,12),
+                    'aic': model_fit.aic
+                }
+            else:
+                # ARIMA model (p,d,q) - simple (1,1,1)
+                model = ARIMA(values, order=(1,1,1))
+                model_fit = model.fit()
+                model_info = {
+                    'model_type': 'ARIMA',
+                    'order': (1,1,1),
+                    'aic': model_fit.aic
+                }
 
             # Cache the model
             if model_key:
                 db.save_cached_arima_model(model_key, model_fit, model_info)
 
-        # Forecast
-        forecast = model_fit.forecast(steps=periods)
+        # Forecast with confidence intervals
+        forecast_result = model_fit.get_forecast(steps=periods)
+        forecast = forecast_result.predicted_mean
+        confidence_intervals = forecast_result.conf_int()
 
         # Return forecast as list
         forecast_dates = pd.date_range(start=dates[-1] + pd.DateOffset(months=1), periods=periods, freq='M')
         return {
             'forecast_dates': forecast_dates.strftime('%Y-%m-%d').tolist(),
             'forecast_values': forecast.tolist(),
+            'confidence_intervals': {
+                'lower': confidence_intervals.iloc[:, 0].tolist(),
+                'upper': confidence_intervals.iloc[:, 1].tolist()
+            },
             'model_info': model_info,
             'cached': cached_model is not None
         }
     except Exception as e:
         return {'error': str(e)}
 
-def forecast_weather(historical_weather, variable='temperature', periods=12, location_key=None):
+def forecast_weather(historical_weather, variable='temperature', periods=12, location_key=None, use_sarima=False):
     """
-    Forecast weather variable using ARIMA with caching.
+    Forecast weather variable using ARIMA/SARIMA with caching and confidence intervals.
     historical_weather: dict with 'dates', 'temperature', 'rainfall' lists
     variable: 'temperature', 'rainfall', or 'precipitation' (alias for rainfall)
+    periods: number of months to forecast
     location_key: key for caching (lat_lon format)
+    use_sarima: whether to use SARIMA instead of ARIMA
     """
     try:
         # Handle precipitation as alias for rainfall
@@ -101,7 +128,8 @@ def forecast_weather(historical_weather, variable='temperature', periods=12, loc
         model_key = None
         if location_key:
             data_hash = hashlib.md5(str(values.values.tolist()).encode()).hexdigest()
-            model_key = f"weather_{variable}_{location_key}_{data_hash}"
+            model_type = 'sarima' if use_sarima else 'arima'
+            model_key = f"weather_{variable}_{model_type}_{location_key}_{data_hash}"
 
         # Try to get cached model
         cached_model = None
@@ -114,22 +142,47 @@ def forecast_weather(historical_weather, variable='temperature', periods=12, loc
             model_fit = cached_model['model']
             model_info = cached_model['model_info']
         else:
-            # Fit ARIMA
-            model = ARIMA(values, order=(1,1,1))
-            model_fit = model.fit()
-            model_info = {'order': (1,1,1), 'aic': model_fit.aic, 'variable': variable}
+            # Fit new model
+            if use_sarima:
+                # SARIMA model with seasonal component (12 months seasonality)
+                from statsmodels.tsa.statespace.sarimax import SARIMAX
+                model = SARIMAX(values, order=(1,1,1), seasonal_order=(1,1,1,12))
+                model_fit = model.fit(disp=False)
+                model_info = {
+                    'model_type': 'SARIMA',
+                    'order': (1,1,1),
+                    'seasonal_order': (1,1,1,12),
+                    'aic': model_fit.aic,
+                    'variable': variable
+                }
+            else:
+                # ARIMA model
+                model = ARIMA(values, order=(1,1,1))
+                model_fit = model.fit()
+                model_info = {
+                    'model_type': 'ARIMA',
+                    'order': (1,1,1),
+                    'aic': model_fit.aic,
+                    'variable': variable
+                }
 
             # Cache the model
             if model_key:
                 db.save_cached_arima_model(model_key, model_fit, model_info)
 
-        # Forecast
-        forecast = model_fit.forecast(steps=periods)
+        # Forecast with confidence intervals
+        forecast_result = model_fit.get_forecast(steps=periods)
+        forecast = forecast_result.predicted_mean
+        confidence_intervals = forecast_result.conf_int()
 
         forecast_dates = pd.date_range(start=dates[-1] + pd.DateOffset(months=1), periods=periods, freq='M')
         return {
             'forecast_dates': forecast_dates.strftime('%Y-%m-%d').tolist(),
             'forecast_values': forecast.tolist(),
+            'confidence_intervals': {
+                'lower': confidence_intervals.iloc[:, 0].tolist(),
+                'upper': confidence_intervals.iloc[:, 1].tolist()
+            },
             'variable': variable,
             'model_info': model_info,
             'cached': cached_model is not None

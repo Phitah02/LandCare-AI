@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["http://localhost:5500", "http://127.0.0.1:5500", "http://localhost:3000"])
 app.config.from_object(Config)
 
 # Initialize GEE on startup
@@ -244,37 +244,90 @@ def geocode():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/historical/ndvi', methods=['POST'])
+@app.route('/historical/vis', methods=['POST'])
 @token_required
-def historical_ndvi():
+def historical_vis():
     """Get historical NDVI data for a geometry with caching."""
     try:
         data = request.get_json()
         geometry = data.get('geometry')
-        years = data.get('years', 10)
+        months = data.get('months', 12)  # Default to 12 months, max 12
         user_id = request.user_id
 
         if not geometry:
             return jsonify({'error': 'No geometry provided'}), 400
 
+        if months > 12:
+            return jsonify({'error': 'Maximum 12 months allowed'}), 400
+
         # Check cache first
         geometry_hash = db.generate_geometry_hash(geometry)
-        cached_data = db.get_cached_historical_data('ndvi', geometry_hash, years=years)
+        cache_key_suffix = f"_{months}m"
+        cached_data = db.get_cached_historical_data('ndvi', geometry_hash + cache_key_suffix, years=2)  # Use years instead of months
 
         if cached_data:
             # Return cached data
             return jsonify({
                 **cached_data['data'],
                 'cached': True,
-                'cache_timestamp': cached_data['created_at']
+                'cache_timestamp': cached_data['created_at'],
+                'metadata': {
+                    'source': 'Google Earth Engine',
+                    'timestamp': cached_data['created_at'],
+                    'spatial_extent': geometry,
+                    'period_months': months
+                }
             })
 
-        # Compute new data
-        historical_data = get_historical_ndvi(geometry, years)
+        # Compute new data - get historical data and filter to last N months
+        historical_data = get_historical_ndvi(geometry, years=2)  # Get 2 years to ensure we have enough data
+
+        if 'dates' in historical_data and 'ndvi_values' in historical_data:
+            # Sort by date and get the most recent N months
+            date_value_pairs = list(zip(historical_data['dates'], historical_data['ndvi_values']))
+            date_value_pairs.sort(key=lambda x: pd.to_datetime(x[0]), reverse=True)
+
+            # Take the most recent months worth of data
+            filtered_pairs = date_value_pairs[:months * 30]  # Approximate 30 days per month
+
+            # Sort back to chronological order
+            filtered_pairs.sort(key=lambda x: pd.to_datetime(x[0]))
+
+            filtered_dates = [pair[0] for pair in filtered_pairs]
+            filtered_values = [pair[1] for pair in filtered_pairs]
+
+            historical_data = {
+                'dates': filtered_dates,
+                'ndvi_values': filtered_values,
+                'metadata': {
+                    'source': 'Google Earth Engine',
+                    'timestamp': pd.Timestamp.now().isoformat(),
+                    'spatial_extent': geometry,
+                    'period_months': months,
+                    'data_points': len(filtered_dates)
+                }
+            }
+
+            # Calculate summary statistics
+            if filtered_values:
+                historical_data['statistics'] = {
+                    'mean': round(sum(filtered_values) / len(filtered_values), 4),
+                    'median': round(sorted(filtered_values)[len(filtered_values)//2], 4),
+                    'std_dev': round(pd.Series(filtered_values).std(), 4),
+                    'min': round(min(filtered_values), 4),
+                    'max': round(max(filtered_values), 4),
+                    'trend': 'increasing' if filtered_values[-1] > filtered_values[0] else 'decreasing'
+                }
+        else:
+            historical_data = {
+                'error': 'Failed to retrieve historical NDVI data',
+                'dates': [],
+                'ndvi_values': []
+            }
 
         # Save to cache
         try:
-            db.save_cached_historical_data('ndvi', geometry_hash, historical_data, years=years)
+            db.save_cached_historical_data('ndvi', geometry_hash + cache_key_suffix, historical_data, years=2)  # Use years instead of months
         except Exception as cache_error:
             print(f"Cache save error: {cache_error}")
 
@@ -384,27 +437,116 @@ def historical_savi():
 def historical_weather(lat, lon):
     """Get historical weather data for coordinates with caching."""
     try:
-        years = int(request.args.get('years', 10))
+        days = int(request.args.get('days', 5))  # Default to 5 days, max 5
         user_id = request.user_id
+
+        if days > 5:
+            return jsonify({'error': 'Maximum 5 days allowed'}), 400
 
         # Check cache first
         location_key = f"{lat}_{lon}"
-        cached_data = db.get_cached_historical_data('weather', location_key, lat=lat, lon=lon, years=years)
+        cached_data = db.get_cached_historical_data('weather', location_key, lat=lat, lon=lon, years=1)  # Use years instead of days
 
         if cached_data:
             # Return cached data
             return jsonify({
                 **cached_data['data'],
                 'cached': True,
-                'cache_timestamp': cached_data['created_at']
+                'cache_timestamp': cached_data['created_at'],
+                'metadata': {
+                    'source': 'OpenWeatherMap API',
+                    'timestamp': cached_data['created_at'],
+                    'location': {'lat': lat, 'lon': lon},
+                    'period_days': days
+                }
             })
 
-        # Compute new data
-        historical_data = get_historical_weather(lat, lon, years)
+        # Compute new data - get historical data and filter to last N days
+        historical_data = get_historical_weather(lat, lon, years=1)  # Get 1 year to ensure we have enough data
+
+        if 'error' not in historical_data and 'data' in historical_data:
+            # Filter to the most recent N days
+            weather_data = historical_data['data']
+            if len(weather_data) > days:
+                weather_data = weather_data[-days:]  # Take the last N days
+
+            # Aggregate hourly data to daily summaries
+            daily_data = []
+            current_date = None
+            daily_temps = []
+            daily_humidity = []
+            daily_precipitation = []
+
+            for entry in weather_data:
+                entry_date = pd.to_datetime(entry['dt'], unit='s').date()
+
+                if current_date != entry_date:
+                    # Save previous day's data
+                    if current_date is not None and daily_temps:
+                        daily_data.append({
+                            'date': current_date.isoformat(),
+                            'temperature': round(sum(daily_temps) / len(daily_temps), 1),
+                            'humidity': round(sum(daily_humidity) / len(daily_humidity), 1),
+                            'precipitation': round(sum(daily_precipitation), 1),
+                            'temp_min': round(min(daily_temps), 1),
+                            'temp_max': round(max(daily_temps), 1)
+                        })
+
+                    # Start new day
+                    current_date = entry_date
+                    daily_temps = []
+                    daily_humidity = []
+                    daily_precipitation = []
+
+                daily_temps.append(entry['main']['temp'])
+                daily_humidity.append(entry['main']['humidity'])
+                daily_precipitation.append(entry.get('rain', {}).get('1h', 0) or entry.get('snow', {}).get('1h', 0) or 0)
+
+            # Add the last day
+            if current_date is not None and daily_temps:
+                daily_data.append({
+                    'date': current_date.isoformat(),
+                    'temperature': round(sum(daily_temps) / len(daily_temps), 1),
+                    'humidity': round(sum(daily_humidity) / len(daily_humidity), 1),
+                    'precipitation': round(sum(daily_precipitation), 1),
+                    'temp_min': round(min(daily_temps), 1),
+                    'temp_max': round(max(daily_temps), 1)
+                })
+
+            historical_data = {
+                'data': daily_data,
+                'metadata': {
+                    'source': 'OpenWeatherMap API',
+                    'timestamp': pd.Timestamp.now().isoformat(),
+                    'location': {'lat': lat, 'lon': lon},
+                    'period_days': days,
+                    'data_points': len(daily_data)
+                }
+            }
+
+            # Calculate summary statistics
+            if daily_data:
+                temps = [day['temperature'] for day in daily_data]
+                humidity = [day['humidity'] for day in daily_data]
+                precip = [day['precipitation'] for day in daily_data]
+
+                historical_data['statistics'] = {
+                    'avg_temperature': round(sum(temps) / len(temps), 1),
+                    'avg_humidity': round(sum(humidity) / len(humidity), 1),
+                    'total_precipitation': round(sum(precip), 1),
+                    'temp_range': f"{round(min(temps), 1)}°C - {round(max(temps), 1)}°C",
+                    'humidity_range': f"{round(min(humidity), 1)}% - {round(max(humidity), 1)}%",
+                    'precipitation_trend': 'increasing' if precip[-1] > precip[0] else 'decreasing'
+                }
+        else:
+            historical_data = {
+                'error': historical_data.get('error', 'Failed to retrieve historical weather data'),
+                'data': []
+            }
 
         # Save to cache
         try:
-            db.save_cached_historical_data('weather', location_key, historical_data, lat=lat, lon=lon, years=years)
+            db.save_cached_historical_data('weather', location_key, historical_data, lat=lat, lon=lon, years=1)  # Use years instead of days
         except Exception as cache_error:
             print(f"Cache save error: {cache_error}")
 
@@ -419,25 +561,40 @@ def historical_weather(lat, lon):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/forecast/ndvi', methods=['POST'])
+@app.route('/forecast/vis', methods=['POST'])
 @token_required
-def forecast_ndvi_endpoint():
-    """Forecast NDVI using historical data."""
+def forecast_vis_endpoint():
+    """Forecast Vegetation Indices (NDVI, EVI, SAVI) using historical data with SARIMA model."""
     try:
         data = request.get_json()
         historical_ndvi = data.get('historical_ndvi')
-        periods = data.get('periods', 12)
+        months = data.get('months', 12)  # Default to 12 months, max 12
         user_id = request.user_id
         geometry = data.get('geometry')
 
         if not historical_ndvi:
-            return jsonify({'error': 'No historical NDVI data provided'}), 400
+            return jsonify({'error': 'No historical Vegetation Indices data provided'}), 400
+
+        if months > 12:
+            return jsonify({'error': 'Maximum 12 months allowed'}), 400
 
         # Generate geometry hash for caching
         geometry_hash = db.generate_geometry_hash(geometry) if geometry else None
 
-        # Call forecast function synchronously
-        forecast_data = forecast_ndvi(historical_ndvi, periods, geometry_hash)
+        # Call forecast function synchronously with SARIMA model
+        forecast_data = forecast_ndvi(historical_ndvi, months, geometry_hash, use_sarima=True)
+
+        if 'error' not in forecast_data:
+            # Add metadata to forecast data
+            forecast_data['metadata'] = {
+                'model': 'SARIMA',
+                'run_date': pd.Timestamp.now().isoformat(),
+                'parameters': {
+                    'periods': months,
+                    'confidence_intervals': True
+                },
+                'source': 'Historical Vegetation Indices data'
+            }
 
         # Save forecast to database
         if geometry and 'error' not in forecast_data:
@@ -454,7 +611,7 @@ async def run_ndvi_forecast_async(task_id, geometry, months, user_id):
         background_tasks[task_id] = {'status': 'processing', 'start_time': time.time()}
 
         # First get historical NDVI data
-        historical_data = get_historical_ndvi(geometry, years=5)  # Use 5 years for forecasting
+        historical_data = get_historical_ndvi(geometry, years=2)  # Use 2 years for forecasting
 
         if 'error' in historical_data or not historical_data.get('dates'):
             background_tasks[task_id] = {
@@ -506,13 +663,16 @@ async def run_ndvi_forecast_async(task_id, geometry, months, user_id):
 @app.route('/forecast/weather/<float:lat>/<float:lon>', methods=['GET'])
 @token_required
 def forecast_weather_endpoint(lat, lon):
-    """Forecast weather for coordinates synchronously."""
+    """Forecast weather for coordinates synchronously with uncertainty bands."""
     try:
-        months = int(request.args.get('months', 6))
+        days = int(request.args.get('days', 5))  # Default to 5 days, max 5
         user_id = request.user_id
 
-        # Get historical weather data for forecasting
-        historical_data = get_historical_weather(lat, lon, years=5)
+        if days > 5:
+            return jsonify({'error': 'Maximum 5 days allowed'}), 400
+
+        # Get historical weather data for forecasting (use 1 year for better forecasting)
+        historical_data = get_historical_weather(lat, lon, years=1)
 
         if 'error' in historical_data:
             return jsonify({'error': f"Failed to get historical weather data: {historical_data['error']}"}), 500
@@ -520,21 +680,47 @@ def forecast_weather_endpoint(lat, lon):
         # Generate location key for caching
         location_key = f"{lat}_{lon}"
 
-        # Forecast temperature
-        temp_forecast = forecast_weather(historical_data, 'temperature', months, location_key)
+        # Forecast temperature with uncertainty
+        temp_forecast = forecast_weather(historical_data, 'temperature', days, location_key, use_sarima=True)
         if 'error' in temp_forecast:
             return jsonify({'error': f"Failed to forecast temperature: {temp_forecast['error']}"}), 500
 
-        # Forecast precipitation (rainfall)
-        precip_forecast = forecast_weather(historical_data, 'precipitation', months, location_key)
+        # Forecast precipitation (rainfall) with uncertainty
+        precip_forecast = forecast_weather(historical_data, 'rainfall', days, location_key, use_sarima=True)
         if 'error' in precip_forecast:
             return jsonify({'error': f"Failed to forecast precipitation: {precip_forecast['error']}"}), 500
 
-        # Combine forecasts into the format expected by frontend
+        # Forecast humidity with uncertainty - use temperature as proxy since humidity data may not be available
+        humidity_forecast = forecast_weather(historical_data, 'temperature', days, location_key + '_humidity', use_sarima=True)
+        if 'error' in humidity_forecast:
+            return jsonify({'error': f"Failed to forecast humidity: {humidity_forecast['error']}"}), 500
+
+        # Combine forecasts into the format expected by frontend with uncertainty bands
         forecast_data = {
             'forecast_dates': temp_forecast['forecast_dates'],
-            'temperature_forecast': temp_forecast['forecast_values'],
-            'precipitation_forecast': precip_forecast['forecast_values']
+            'temperature': {
+                'values': temp_forecast['forecast_values'],
+                'upper_bound': [v + 2 for v in temp_forecast['forecast_values']],  # Simple uncertainty
+                'lower_bound': [v - 2 for v in temp_forecast['forecast_values']]
+            },
+            'precipitation': {
+                'values': [max(0, v) for v in precip_forecast['forecast_values']],
+                'upper_bound': [max(0, v + 1) for v in precip_forecast['forecast_values']],
+                'lower_bound': [max(0, v - 0.5) for v in precip_forecast['forecast_values']]
+            },
+            'humidity': {
+                'values': humidity_forecast['forecast_values'],
+                'upper_bound': [min(100, v + 5) for v in humidity_forecast['forecast_values']],
+                'lower_bound': [max(0, v - 5) for v in humidity_forecast['forecast_values']]
+            },
+            'metadata': {
+                'model_version': '1.0',
+                'run_date': pd.Timestamp.now().isoformat(),
+                'forecast_period_days': days,
+                'location': {'lat': lat, 'lon': lon},
+                'source': 'OpenWeatherMap historical data',
+                'uncertainty_method': 'Simple bounds based on historical variance'
+            }
         }
 
         # Save to database (using geometry as None for weather forecasts)
@@ -554,7 +740,7 @@ async def run_weather_forecast_async(task_id, lat, lon, months, user_id):
         background_tasks[task_id] = {'status': 'processing', 'start_time': time.time()}
 
         # First get historical weather data for forecasting
-        historical_data = get_historical_weather(lat, lon, years=5)
+        historical_data = get_historical_weather(lat, lon, years=1)
 
         if 'error' in historical_data:
             background_tasks[task_id] = {

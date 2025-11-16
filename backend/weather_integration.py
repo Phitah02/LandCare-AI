@@ -362,7 +362,26 @@ def get_historical_weather(lat, lon, years=10):
         weather_results = ym_list.map(lambda ym: get_monthly_weather(ym))
 
         # Get results
-        results_list = weather_results.getInfo()
+        try:
+            results_list = weather_results.getInfo()
+        except Exception as get_info_error:
+            print(f"Error getting GEE results: {get_info_error}")
+            # Return mock data on error
+            dates = []
+            temperatures = []
+            rainfall = []
+            for year in range(2023 - years + 1, 2024):
+                for month in range(1, 13):
+                    dates.append(f"{year}-{month:02d}-15")
+                    temperatures.append(20 + 10 * np.sin(month * np.pi / 6) + np.random.normal(0, 5))
+                    rainfall.append(max(0, 50 + 30 * np.sin(month * np.pi / 6) + np.random.normal(0, 20)))
+            return {
+                'dates': dates,
+                'temperature': temperatures,
+                'rainfall': rainfall,
+                'error': f'GEE getInfo error: {str(get_info_error)}',
+                'note': 'Mock data due to GEE error'
+            }
 
         # Process results
         dates = []
