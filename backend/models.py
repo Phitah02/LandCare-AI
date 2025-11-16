@@ -62,7 +62,7 @@ class Database:
     def get_user_analyses(self, user_id: str, limit: int = 10):
         """Get user's analysis history."""
         try:
-            return self.client.table('landcare_analyses').select('*').eq('user_id', user_id).order('created_at', descending=True).limit(limit).execute()
+            return self.client.table('landcare_analyses').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(limit).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None
@@ -234,7 +234,7 @@ class Database:
     def get_historical_data(self, user_id: str, data_type: str, limit: int = 5):
         """Get user's historical data."""
         try:
-            return self.client.table('landcare_historical_data').select('*').eq('user_id', user_id).eq('data_type', data_type).order('created_at', descending=True).limit(limit).execute()
+            return self.client.table('landcare_historical_data').select('*').eq('user_id', user_id).eq('data_type', data_type).order('created_at', desc=True).limit(limit).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None
@@ -261,7 +261,7 @@ class Database:
     def get_forecasts(self, user_id: str, limit: int = 5):
         """Get user's forecast history."""
         try:
-            return self.client.table('landcare_forecasts').select('*').eq('user_id', user_id).order('created_at', descending=True).limit(limit).execute()
+            return self.client.table('landcare_forecasts').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(limit).execute()
         except Exception as e:
             print(f"Database error: {e}")
             return None

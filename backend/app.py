@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:5500", "http://127.0.0.1:5500", "http://localhost:3000"])
+CORS(app, origins=["http://localhost:5500", "http://127.0.0.1:5500", "http://localhost:3000", "http://localhost:8000", "http://127.0.0.1:8000"], supports_credentials=True)
 app.config.from_object(Config)
 
 # Initialize GEE on startup
@@ -432,7 +432,7 @@ def historical_savi():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['GET'])
+@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['GET', 'OPTIONS'])
 @token_required
 def historical_weather(lat, lon):
     """Get historical weather data for coordinates with caching."""

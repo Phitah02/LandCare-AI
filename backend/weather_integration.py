@@ -315,9 +315,9 @@ def get_historical_weather(lat, lon, years=10):
         # Define function to extract monthly data (to be mapped over)
         def get_monthly_weather(year_month_str):
             def inner_calc(ym_str):
-                year, month = ym_str.split('-')
-                year = ee.Number.parse(year)
-                month = ee.Number.parse(month)
+                ym_list = ee.String(ym_str).split('-')
+                year = ee.Number.parse(ym_list.get(0))
+                month = ee.Number.parse(ym_list.get(1))
 
                 start = ee.Date.fromYMD(year, month, 1)
                 end = ee.Date.fromYMD(
