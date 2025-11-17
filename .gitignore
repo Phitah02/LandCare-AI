@@ -3,6 +3,7 @@
 .env*
 backend/ee-daudipeterkamau-14e6262536e5.json
 
+
 # Virtual Environments
 .venv/
 venv/
@@ -66,3 +67,5 @@ TASKS_COMPLETED.txt
 # Ignore all markdown files except README.md
 *.md
 !README.md
+
+eee
