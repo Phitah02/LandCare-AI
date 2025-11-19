@@ -223,6 +223,7 @@ class LandCareApp {
                 console.log('Clear button clicked');
                 this.mapHandler.clearDrawings();
                 this.clearResults();
+                this.removeSearchPolygon(); // Also clear search polygon
             });
         } else {
             console.error('Clear button not found');
@@ -477,13 +478,9 @@ class LandCareApp {
                 updateRiskMeter(riskFactors.weather_risk, 'weather-risk-percent', 'weather-risk-fill', 'weather-risk-level');
             }
 
-            // Update early warnings if available
-            if (results.risk_assessment.recommendations) {
-                this.updateEarlyWarnings(results.risk_assessment.recommendations);
-            } else {
-                // Generate early warnings based on statistics and risk analysis
-                this.generateEarlyWarnings(results);
-            }
+            // Generate early warnings based on statistics and risk analysis
+            const warnings = this.generateEarlyWarnings(results);
+            this.displayEarlyWarnings(warnings);
         }
 
         // Update land cover summary (legacy support)
@@ -605,6 +602,12 @@ class LandCareApp {
             return;
         }
 
+        // Show loading feedback
+        const searchBtn = document.getElementById('search-location');
+        const originalText = searchBtn.textContent;
+        searchBtn.disabled = true;
+        searchBtn.textContent = 'Searching...';
+
         try {
             const response = await fetch('http://localhost:5000/geocode', {
                 method: 'POST',
@@ -622,28 +625,41 @@ class LandCareApp {
 
             // Center map on the found location
             this.mapHandler.map.setView([data.lat, data.lon], 10);
+
+            // Display bounding polygon if boundingbox is available
+            if (data.boundingbox) {
+                this.displaySearchBoundingPolygon(data.boundingbox, data.display_name, placeName);
+            }
+
             this.showSuccess(`Found: ${data.display_name}`);
         } catch (error) {
             this.showError(`Search error: ${error.message}`);
             console.error('Geocoding error:', error);
+        } finally {
+            // Reset button
+            searchBtn.disabled = false;
+            searchBtn.textContent = originalText;
         }
     }
 
     toggleTheme() {
         const htmlElement = document.documentElement;
         const isDark = htmlElement.getAttribute('data-theme') === 'dark';
-        
+
         const newTheme = isDark ? 'light' : 'dark';
         htmlElement.setAttribute('data-theme', newTheme);
-        
+
         // Save preference
         localStorage.setItem('theme', newTheme);
-        
+
         // Update button text/icon
         const themeToggle = document.getElementById('theme-toggle');
         if (themeToggle) {
             themeToggle.textContent = newTheme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
         }
+
+        // Re-render all existing charts with new theme colors
+        this.updateChartThemes();
     }
 
     initTheme() {
@@ -701,6 +717,51 @@ class LandCareApp {
             console.log('Chart.js initialized');
         } else {
             console.log('Chart.js not available, charts disabled');
+        }
+    }
+
+    getChartThemeColors() {
+        const root = document.documentElement;
+        const isDark = root.getAttribute('data-theme') === 'dark';
+
+        return {
+            textColor: getComputedStyle(root).getPropertyValue('--chart-text').trim(),
+            gridColor: getComputedStyle(root).getPropertyValue('--chart-grid').trim(),
+            backgroundColor: getComputedStyle(root).getPropertyValue('--chart-bg').trim(),
+            green: isDark ? '#4caf50' : '#2e7d32',
+            blue: isDark ? '#1976d2' : '#1565c0',
+            orange: isDark ? '#f57c00' : '#f57c00',
+            red: isDark ? '#d32f2f' : '#d32f2f'
+        };
+    }
+
+    updateChartThemes() {
+        // Update existing charts with new theme colors
+        // Note: This is a simplified approach. In a full implementation,
+        // you'd store chart data and re-render with new colors
+        if (this.chartInstances) {
+            Object.keys(this.chartInstances).forEach(canvasId => {
+                const chart = this.chartInstances[canvasId];
+                if (chart) {
+                    const themeColors = this.getChartThemeColors();
+                    // Update title color
+                    if (chart.options.plugins && chart.options.plugins.title) {
+                        chart.options.plugins.title.color = themeColors.textColor;
+                    }
+                    // Update scale colors
+                    if (chart.options.scales) {
+                        Object.keys(chart.options.scales).forEach(scaleKey => {
+                            const scale = chart.options.scales[scaleKey];
+                            if (scale.title) scale.title.color = themeColors.textColor;
+                            if (scale.ticks) scale.ticks.color = themeColors.textColor;
+                            if (scale.grid && scale.grid.color !== undefined) {
+                                scale.grid.color = themeColors.gridColor;
+                            }
+                        });
+                    }
+                    chart.update();
+                }
+            });
         }
     }
 
@@ -864,141 +925,431 @@ class LandCareApp {
         });
     }
 
-    updateEarlyWarnings(recommendations) {
+    displayEarlyWarnings(warnings) {
         const earlyWarningsEl = document.getElementById('early-warnings-list');
         if (!earlyWarningsEl) return;
 
         // Clear existing content
         earlyWarningsEl.innerHTML = '';
 
-        if (!recommendations || recommendations.length === 0) {
+        if (!warnings || warnings.length === 0) {
             const noWarningsDiv = document.createElement('div');
             noWarningsDiv.className = 'no-warnings';
-            noWarningsDiv.textContent = 'No early warnings at this time';
-            earlyWarningsEl.appendChild(noWarningsDiv);
-            return;
-        }
-
-        recommendations.forEach(recommendation => {
-            const warningDiv = document.createElement('div');
-            warningDiv.className = 'early-warning-item';
-
-            const warningIcon = document.createElement('span');
-            warningIcon.className = 'warning-icon';
-            warningIcon.textContent = '⚠️';
-
-            const warningText = document.createElement('span');
-            warningText.className = 'warning-text';
-            warningText.innerHTML = `<strong>${recommendation}</strong>`;
-
-            warningDiv.appendChild(warningIcon);
-            warningDiv.appendChild(warningText);
-            earlyWarningsEl.appendChild(warningDiv);
-        });
-    }
-
-    generateEarlyWarnings(results) {
-        const earlyWarningsEl = document.getElementById('early-warnings-list');
-        if (!earlyWarningsEl) return;
-
-        // Clear existing content
-        earlyWarningsEl.innerHTML = '';
-
-        const warnings = [];
-
-        // Analyze risk factors and generate warnings
-        if (results.risk_assessment && results.risk_assessment.risk_factors) {
-            const riskFactors = results.risk_assessment.risk_factors;
-            const riskLevel = results.risk_assessment.risk_level;
-
-            // High vegetation risk
-            if (riskFactors.vegetation_risk > 0.7) {
-                warnings.push('High vegetation degradation risk detected. Consider implementing reforestation programs.');
-            }
-
-            // High erosion risk
-            if (riskFactors.erosion_risk > 0.7) {
-                warnings.push('Severe soil erosion risk. Implement soil conservation measures immediately.');
-            }
-
-            // High weather risk
-            if (riskFactors.weather_risk > 0.7) {
-                warnings.push('Extreme weather vulnerability. Prepare for potential flooding or drought conditions.');
-            }
-
-            // Land cover issues
-            if (results.land_cover && results.land_cover.land_cover_types) {
-                const landCoverTypes = results.land_cover.land_cover_types;
-                const totalPixels = Object.values(landCoverTypes).reduce((sum, count) => sum + count, 0);
-
-                // Check for high bare land percentage
-                const bareLandTypes = ['bare_ground', 'bare_soil', 'urban'];
-                let bareLandPixels = 0;
-                bareLandTypes.forEach(type => {
-                    if (landCoverTypes[type]) bareLandPixels += landCoverTypes[type];
-                });
-
-                if (bareLandPixels / totalPixels > 0.5) {
-                    warnings.push('High percentage of bare land detected. Increased risk of soil erosion and desertification.');
-                }
-
-                // Check for water body presence
-                if (landCoverTypes['water'] && landCoverTypes['water'] / totalPixels > 0.3) {
-                    warnings.push('Significant water body presence. Monitor for potential flooding risks.');
-                }
-            }
-
-            // Weather-based warnings
-            if (results.weather) {
-                const temp = results.weather.main?.temp;
-                const humidity = results.weather.main?.humidity;
-                const weatherDesc = results.weather.weather_description;
-
-                if (temp > 35) {
-                    warnings.push('Extreme heat conditions detected. High risk of vegetation stress and wildfires.');
-                }
-
-                if (humidity < 20) {
-                    warnings.push('Very low humidity levels. Increased fire risk and soil moisture depletion.');
-                }
-
-                if (weatherDesc && weatherDesc.toLowerCase().includes('rain')) {
-                    warnings.push('Precipitation detected. Monitor for potential soil erosion and flooding.');
-                }
-            }
-
-            // Overall risk level warnings
-            if (riskLevel === 'High') {
-                warnings.push('Critical risk level detected. Immediate intervention required to prevent land degradation.');
-            } else if (riskLevel === 'Medium') {
-                warnings.push('Moderate risk level. Implement preventive measures to maintain land health.');
-            }
-        }
-
-        if (warnings.length === 0) {
-            const noWarningsDiv = document.createElement('div');
-            noWarningsDiv.className = 'no-warnings';
-            noWarningsDiv.textContent = 'No early warnings at this time';
+            noWarningsDiv.innerHTML = '<span style="color: green; font-size: 1.2em;">✅</span> No early warnings at this time';
             earlyWarningsEl.appendChild(noWarningsDiv);
             return;
         }
 
         warnings.forEach(warning => {
             const warningDiv = document.createElement('div');
-            warningDiv.className = 'early-warning-item';
+            warningDiv.className = `early-warning-item ${warning.severity}-warning`;
 
             const warningIcon = document.createElement('span');
             warningIcon.className = 'warning-icon';
-            warningIcon.textContent = '⚠️';
+            warningIcon.textContent = warning.icon;
 
-            const warningText = document.createElement('span');
+            const warningContent = document.createElement('div');
+            warningContent.className = 'warning-content';
+
+            const warningText = document.createElement('div');
             warningText.className = 'warning-text';
-            warningText.innerHTML = `<strong>${warning}</strong>`;
+            warningText.innerHTML = `<strong>${warning.message}</strong>`;
+
+            const recommendationsDiv = document.createElement('div');
+            recommendationsDiv.className = 'warning-recommendations';
+            recommendationsDiv.innerHTML = '<strong>Recommendations:</strong><ul>' +
+                warning.recommendations.map(rec => `<li>${rec}</li>`).join('') + '</ul>';
+
+            const locationDiv = document.createElement('div');
+            locationDiv.className = 'warning-location';
+            locationDiv.innerHTML = `<small><em>Location: ${warning.location}</em></small>`;
+
+            warningContent.appendChild(warningText);
+            warningContent.appendChild(recommendationsDiv);
+            warningContent.appendChild(locationDiv);
 
             warningDiv.appendChild(warningIcon);
-            warningDiv.appendChild(warningText);
+            warningDiv.appendChild(warningContent);
             earlyWarningsEl.appendChild(warningDiv);
         });
+    }
+
+    generateEarlyWarnings(riskAssessmentResults, config = {}) {
+        // Default thresholds
+        const thresholds = {
+            vegetation: {
+                healthIndex: 0.3,
+                degradationRate: 0.1 // 10% per month
+            },
+            erosion: {
+                risk: 0.7
+            },
+            weather: {
+                risk: 0.7,
+                heatTemp: 35,
+                lowHumidity: 20,
+                windSpeed: 20
+            },
+            biodiversity: {
+                diversityIndex: 0.5
+            },
+            carbonSequestration: {
+                dropPercentage: 0.2 // 20% below baseline
+            },
+            environmental: {
+                bareLandPercentage: 0.5,
+                bareLandCritical: 0.7,
+                waterBodyPercentage: 0.3,
+                soilMoisture: 15
+            },
+            compositeRisk: {
+                critical: 0.8,
+                medium: 0.5
+            }
+        };
+
+        // Override with config if provided
+        if (config.thresholds) {
+            Object.assign(thresholds, config.thresholds);
+        }
+
+        const warnings = [];
+        const results = riskAssessmentResults;
+
+        // Helper function to determine severity
+        const getSeverity = (riskValue) => {
+            if (riskValue >= thresholds.compositeRisk.critical) return 'critical';
+            if (riskValue >= thresholds.compositeRisk.medium) return 'medium';
+            return 'low';
+        };
+
+        // Helper function to get icon
+        const getIcon = (severity) => {
+            switch (severity) {
+                case 'critical': return '🚨';
+                case 'medium': return '⚠️';
+                case 'low': return 'ℹ️';
+                default: return '⚠️';
+            }
+        };
+
+        // Vegetation degradation alerts
+        if (results.ndvi && results.ndvi.NDVI !== undefined) {
+            const ndvi = results.ndvi.NDVI;
+            if (ndvi < thresholds.vegetation.healthIndex) {
+                const severity = getSeverity(0.8); // High severity for low NDVI
+                warnings.push({
+                    message: `Vegetation health index (${ndvi.toFixed(3)}) below critical threshold (${thresholds.vegetation.healthIndex}). Severe degradation detected.`,
+                    severity: severity,
+                    icon: getIcon(severity),
+                    recommendations: [
+                        'Implement immediate reforestation programs',
+                        'Conduct soil fertility assessment',
+                        'Install irrigation systems if applicable',
+                        'Monitor vegetation recovery over next 3 months'
+                    ],
+                    location: results.centroid || 'Selected area'
+                });
+            }
+        }
+
+        // Soil erosion warnings
+        if (results.risk_assessment?.risk_factors?.erosion_risk !== undefined) {
+            const erosionRisk = results.risk_assessment.risk_factors.erosion_risk;
+            if (erosionRisk > thresholds.erosion.risk) {
+                const severity = getSeverity(erosionRisk);
+                warnings.push({
+                    message: `Soil erosion risk (${(erosionRisk * 100).toFixed(0)}%) exceeds threshold (${(thresholds.erosion.risk * 100).toFixed(0)}%).`,
+                    severity: severity,
+                    icon: getIcon(severity),
+                    recommendations: [
+                        'Implement contour farming techniques',
+                        'Install erosion control structures',
+                        'Plant cover crops immediately',
+                        'Monitor slope stability and soil depth'
+                    ],
+                    location: results.centroid || 'Selected area'
+                });
+            }
+        }
+
+        // Weather vulnerability alerts
+        if (results.risk_assessment?.risk_factors?.weather_risk !== undefined) {
+            const weatherRisk = results.risk_assessment.risk_factors.weather_risk;
+            if (weatherRisk > thresholds.weather.risk) {
+                const severity = getSeverity(weatherRisk);
+                warnings.push({
+                    message: `Weather vulnerability risk (${(weatherRisk * 100).toFixed(0)}%) indicates potential extreme weather impacts.`,
+                    severity: severity,
+                    icon: getIcon(severity),
+                    recommendations: [
+                        'Prepare emergency response plans',
+                        'Stockpile drought-resistant seeds',
+                        'Install weather monitoring stations',
+                        'Develop water conservation strategies'
+                    ],
+                    location: results.centroid || 'Selected area'
+                });
+            }
+        }
+
+        // Biodiversity alerts
+        if (results.biodiversity?.diversity_index !== undefined) {
+            const diversityIndex = results.biodiversity.diversity_index;
+            if (diversityIndex < thresholds.biodiversity.diversityIndex) {
+                const severity = getSeverity(0.7);
+                warnings.push({
+                    message: `Biodiversity diversity index (${diversityIndex.toFixed(2)}) below threshold (${thresholds.biodiversity.diversityIndex}). Ecosystem imbalance detected.`,
+                    severity: severity,
+                    icon: getIcon(severity),
+                    recommendations: [
+                        'Conduct biodiversity assessment survey',
+                        'Implement habitat restoration programs',
+                        'Introduce native species',
+                        'Monitor species population trends'
+                    ],
+                    location: results.centroid || 'Selected area'
+                });
+            }
+        }
+
+        // Carbon sequestration warnings
+        if (results.carbon?.sequestration_rate !== undefined && results.carbon?.baseline_rate !== undefined) {
+            const currentRate = results.carbon.sequestration_rate;
+            const baselineRate = results.carbon.baseline_rate;
+            const dropPercentage = (baselineRate - currentRate) / baselineRate;
+
+            if (dropPercentage > thresholds.carbonSequestration.dropPercentage) {
+                const severity = getSeverity(dropPercentage);
+                warnings.push({
+                    message: `Carbon sequestration rate dropped ${(dropPercentage * 100).toFixed(0)}% below baseline. Reduced carbon capture capacity.`,
+                    severity: severity,
+                    icon: getIcon(severity),
+                    recommendations: [
+                        'Enhance afforestation efforts',
+                        'Implement carbon farming practices',
+                        'Monitor soil organic matter levels',
+                        'Assess land management practices'
+                    ],
+                    location: results.centroid || 'Selected area'
+                });
+            }
+        }
+
+        // Environmental composition monitoring
+        if (results.land_cover) {
+            const landCoverData = results.land_cover.land_cover_areas || results.land_cover.land_cover_types;
+            if (landCoverData) {
+                const totalPixels = Object.values(landCoverData).reduce((sum, value) => {
+                    return sum + (typeof value === 'object' ? value.pixel_count : value);
+                }, 0);
+
+                // Bare land percentage alerts
+                const bareLandTypes = ['bare_ground', 'bare_soil', 'urban'];
+                let bareLandPixels = 0;
+                bareLandTypes.forEach(type => {
+                    const value = landCoverData[type];
+                    if (value) {
+                        bareLandPixels += typeof value === 'object' ? value.pixel_count : value;
+                    }
+                });
+
+                const bareLandPercentage = bareLandPixels / totalPixels;
+                if (bareLandPercentage > thresholds.environmental.bareLandPercentage) {
+                    const severity = bareLandPercentage > thresholds.environmental.bareLandCritical ? 'critical' : 'medium';
+                    warnings.push({
+                        message: `Bare land percentage (${(bareLandPercentage * 100).toFixed(1)}%) exceeds threshold (${(thresholds.environmental.bareLandPercentage * 100).toFixed(0)}%).`,
+                        severity: severity,
+                        icon: getIcon(severity),
+                        recommendations: [
+                            'Implement large-scale reforestation',
+                            'Develop soil stabilization programs',
+                            'Monitor desertification progression',
+                            'Establish vegetation corridors'
+                        ],
+                        location: results.centroid || 'Selected area'
+                    });
+                }
+
+                // Water body monitoring alerts
+                const waterValue = landCoverData['water'];
+                if (waterValue) {
+                    const waterPixels = typeof waterValue === 'object' ? waterValue.pixel_count : waterValue;
+                    const waterPercentage = waterPixels / totalPixels;
+
+                    if (waterPercentage > thresholds.environmental.waterBodyPercentage) {
+                        const severity = getSeverity(0.6);
+                        warnings.push({
+                            message: `Water body coverage (${(waterPercentage * 100).toFixed(1)}%) indicates potential flooding risks.`,
+                            severity: severity,
+                            icon: getIcon(severity),
+                            recommendations: [
+                                'Install flood monitoring systems',
+                                'Develop floodplain management plans',
+                                'Strengthen drainage infrastructure',
+                                'Monitor water level changes'
+                            ],
+                            location: results.centroid || 'Selected area'
+                        });
+                    }
+                }
+
+                // Soil moisture alerts
+                if (results.soil?.moisture_percentage !== undefined) {
+                    const moisture = results.soil.moisture_percentage;
+                    if (moisture < thresholds.environmental.soilMoisture) {
+                        const severity = getSeverity(0.8);
+                        warnings.push({
+                            message: `Soil moisture level (${moisture.toFixed(1)}%) critically low. Drought conditions likely.`,
+                            severity: severity,
+                            icon: getIcon(severity),
+                            recommendations: [
+                                'Implement emergency irrigation',
+                                'Apply soil moisture conservation techniques',
+                                'Monitor crop stress indicators',
+                                'Prepare drought contingency plans'
+                            ],
+                            location: results.centroid || 'Selected area'
+                        });
+                    }
+                }
+            }
+        }
+
+        // Weather condition alerts
+        if (results.weather) {
+            const temp = results.weather.main?.temp;
+            const humidity = results.weather.main?.humidity;
+            const windSpeed = results.weather.wind?.speed;
+            const weatherDesc = results.weather.weather_description;
+
+            // Extreme heat warnings
+            if (temp > thresholds.weather.heatTemp) {
+                const severity = 'critical';
+                warnings.push({
+                    message: `Extreme heat detected (${temp.toFixed(1)}°C sustained above ${thresholds.weather.heatTemp}°C).`,
+                    severity: severity,
+                    icon: getIcon(severity),
+                    recommendations: [
+                        'Activate heat stress monitoring',
+                        'Implement shade and cooling measures',
+                        'Monitor vegetation for heat damage',
+                        'Prepare fire prevention protocols'
+                    ],
+                    location: results.centroid || 'Selected area'
+                });
+            }
+
+            // Low humidity alerts
+            if (humidity < thresholds.weather.lowHumidity) {
+                const severity = getSeverity(0.7);
+                warnings.push({
+                    message: `Humidity critically low (${humidity.toFixed(1)}% below ${thresholds.weather.lowHumidity}%). Fire risk elevated.`,
+                    severity: severity,
+                    icon: getIcon(severity),
+                    recommendations: [
+                        'Implement fire prevention measures',
+                        'Monitor soil moisture depletion',
+                        'Prepare emergency water supplies',
+                        'Restrict open burning activities'
+                    ],
+                    location: results.centroid || 'Selected area'
+                });
+            }
+
+            // Precipitation detection for erosion monitoring
+            if (weatherDesc && weatherDesc.toLowerCase().includes('rain')) {
+                const severity = 'medium';
+                warnings.push({
+                    message: 'Precipitation detected. Increased soil erosion risk during rainfall events.',
+                    severity: severity,
+                    icon: getIcon(severity),
+                    recommendations: [
+                        'Monitor runoff and erosion channels',
+                        'Ensure erosion control measures are active',
+                        'Check drainage system capacity',
+                        'Prepare sediment control barriers'
+                    ],
+                    location: results.centroid || 'Selected area'
+                });
+            }
+
+            // Wind erosion alerts
+            if (windSpeed > thresholds.weather.windSpeed) {
+                const severity = getSeverity(0.6);
+                warnings.push({
+                    message: `High wind speeds (${windSpeed.toFixed(1)} km/h) detected. Wind erosion risk increased.`,
+                    severity: severity,
+                    icon: getIcon(severity),
+                    recommendations: [
+                        'Implement windbreak installation',
+                        'Monitor soil particle movement',
+                        'Apply surface stabilization techniques',
+                        'Protect vulnerable soil surfaces'
+                    ],
+                    location: results.centroid || 'Selected area'
+                });
+            }
+        }
+
+        // Overall risk level integration
+        if (results.risk_assessment?.overall_risk_score !== undefined) {
+            const overallRisk = results.risk_assessment.overall_risk_score;
+
+            if (overallRisk >= thresholds.compositeRisk.critical) {
+                warnings.push({
+                    message: `CRITICAL: Composite risk score (${overallRisk.toFixed(2)}) indicates immediate emergency response required.`,
+                    severity: 'critical',
+                    icon: '🚨',
+                    recommendations: [
+                        'Activate emergency response protocols',
+                        'Deploy immediate intervention teams',
+                        'Implement crisis management plans',
+                        'Establish 24/7 monitoring operations'
+                    ],
+                    location: results.centroid || 'Selected area'
+                });
+            } else if (overallRisk >= thresholds.compositeRisk.medium) {
+                warnings.push({
+                    message: `MODERATE: Composite risk score (${overallRisk.toFixed(2)}) suggests preventive measures needed.`,
+                    severity: 'medium',
+                    icon: '⚠️',
+                    recommendations: [
+                        'Develop comprehensive management plan',
+                        'Implement monitoring systems',
+                        'Schedule regular assessments',
+                        'Prepare resource allocation'
+                    ],
+                    location: results.centroid || 'Selected area'
+                });
+            }
+        }
+
+        // Predictive alerts based on trends (simplified - would need historical data)
+        if (results.trends) {
+            const vegetationTrend = results.trends.vegetation_degradation_rate;
+            if (vegetationTrend > thresholds.vegetation.degradationRate) {
+                const severity = getSeverity(0.7);
+                warnings.push({
+                    message: `Vegetation degradation accelerating (${(vegetationTrend * 100).toFixed(1)}% per month). Trend indicates worsening conditions.`,
+                    severity: severity,
+                    icon: getIcon(severity),
+                    recommendations: [
+                        'Accelerate intervention programs',
+                        'Monitor trend progression closely',
+                        'Adjust management strategies',
+                        'Prepare contingency plans'
+                    ],
+                    location: results.centroid || 'Selected area'
+                });
+            }
+        }
+
+        // Sort warnings by severity (critical first)
+        const severityOrder = { critical: 3, medium: 2, low: 1 };
+        warnings.sort((a, b) => severityOrder[b.severity] - severityOrder[a.severity]);
+
+        return warnings;
     }
 
     async loadHistoricalNDVI() {
@@ -1294,6 +1645,8 @@ class LandCareApp {
         const ctx = document.getElementById(canvasId);
         if (!ctx) return;
 
+        const themeColors = this.getChartThemeColors();
+
         this.chartInstances[canvasId] = new Chart(ctx, {
             type: 'line',
             data: {
@@ -1301,8 +1654,8 @@ class LandCareApp {
                 datasets: [{
                     label: label,
                     data: values,
-                    borderColor: 'rgb(75, 192, 192)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: themeColors.green,
+                    backgroundColor: themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.2)'),
                     tension: 0.1
                 }]
             },
@@ -1311,7 +1664,8 @@ class LandCareApp {
                 plugins: {
                     title: {
                         display: true,
-                        text: title
+                        text: title,
+                        color: themeColors.textColor
                     }
                 },
                 scales: {
@@ -1319,14 +1673,28 @@ class LandCareApp {
                         display: true,
                         title: {
                             display: true,
-                            text: 'Date'
+                            text: 'Date',
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            color: themeColors.gridColor
                         }
                     },
                     y: {
                         display: true,
                         title: {
                             display: true,
-                            text: label
+                            text: label,
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            color: themeColors.gridColor
                         }
                     }
                 }
@@ -1345,6 +1713,8 @@ class LandCareApp {
         const ctx = document.getElementById(canvasId);
         if (!ctx) return;
 
+        const themeColors = this.getChartThemeColors();
+
         this.chartInstances[canvasId] = new Chart(ctx, {
             type: 'line',
             data: {
@@ -1352,15 +1722,15 @@ class LandCareApp {
                 datasets: [{
                     label: tempLabel,
                     data: tempValues,
-                    borderColor: 'rgb(255, 99, 132)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    borderColor: themeColors.red,
+                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.2)'),
                     yAxisID: 'y',
                     tension: 0.1
                 }, {
                     label: rainLabel,
                     data: rainValues,
-                    borderColor: 'rgb(54, 162, 235)',
-                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    borderColor: themeColors.blue,
+                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.2)'),
                     yAxisID: 'y1',
                     tension: 0.1
                 }]
@@ -1375,7 +1745,8 @@ class LandCareApp {
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Historical Weather Data'
+                        text: 'Historical Weather Data',
+                        color: themeColors.textColor
                     }
                 },
                 scales: {
@@ -1383,7 +1754,14 @@ class LandCareApp {
                         display: true,
                         title: {
                             display: true,
-                            text: 'Date'
+                            text: 'Date',
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            color: themeColors.gridColor
                         }
                     },
                     y: {
@@ -1392,7 +1770,14 @@ class LandCareApp {
                         position: 'left',
                         title: {
                             display: true,
-                            text: tempLabel
+                            text: tempLabel,
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            color: themeColors.gridColor
                         }
                     },
                     y1: {
@@ -1401,7 +1786,11 @@ class LandCareApp {
                         position: 'right',
                         title: {
                             display: true,
-                            text: rainLabel
+                            text: rainLabel,
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
                         },
                         grid: {
                             drawOnChartArea: false,
@@ -1423,11 +1812,13 @@ class LandCareApp {
         const ctx = document.getElementById(canvasId);
         if (!ctx) return;
 
+        const themeColors = this.getChartThemeColors();
+
         const datasets = [{
             label: 'Forecast',
             data: values,
-            borderColor: 'rgb(255, 159, 64)',
-            backgroundColor: 'rgba(255, 159, 64, 0.2)',
+            borderColor: themeColors.orange,
+            backgroundColor: themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.2)'),
             tension: 0.1
         }];
 
@@ -1436,8 +1827,8 @@ class LandCareApp {
             datasets.push({
                 label: 'Confidence Lower',
                 data: confidenceIntervals.lower,
-                borderColor: 'rgba(255, 159, 64, 0.3)',
-                backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                borderColor: themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.3)'),
+                backgroundColor: themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.1)'),
                 fill: false,
                 tension: 0.1,
                 pointRadius: 0
@@ -1445,8 +1836,8 @@ class LandCareApp {
             datasets.push({
                 label: 'Confidence Upper',
                 data: confidenceIntervals.upper,
-                borderColor: 'rgba(255, 159, 64, 0.3)',
-                backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                borderColor: themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.3)'),
+                backgroundColor: themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.1)'),
                 fill: '-1', // Fill to previous dataset
                 tension: 0.1,
                 pointRadius: 0
@@ -1464,7 +1855,8 @@ class LandCareApp {
                 plugins: {
                     title: {
                         display: true,
-                        text: title
+                        text: title,
+                        color: themeColors.textColor
                     }
                 },
                 scales: {
@@ -1472,14 +1864,28 @@ class LandCareApp {
                         display: true,
                         title: {
                             display: true,
-                            text: 'Date'
+                            text: 'Date',
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            color: themeColors.gridColor
                         }
                     },
                     y: {
                         display: true,
                         title: {
                             display: true,
-                            text: 'NDVI'
+                            text: 'NDVI',
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            color: themeColors.gridColor
                         }
                     }
                 }
@@ -1498,6 +1904,8 @@ class LandCareApp {
         const ctx = document.getElementById(canvasId);
         if (!ctx) return;
 
+        const themeColors = this.getChartThemeColors();
+
         this.chartInstances[canvasId] = new Chart(ctx, {
             type: 'line',
             data: {
@@ -1505,15 +1913,15 @@ class LandCareApp {
                 datasets: [{
                     label: 'Temperature Forecast (°C)',
                     data: tempValues,
-                    borderColor: 'rgb(255, 99, 132)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    borderColor: themeColors.red,
+                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.2)'),
                     yAxisID: 'y',
                     tension: 0.1
                 }, {
                     label: 'Precipitation Forecast (mm)',
                     data: rainValues,
-                    borderColor: 'rgb(54, 162, 235)',
-                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    borderColor: themeColors.blue,
+                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.2)'),
                     yAxisID: 'y1',
                     tension: 0.1
                 }]
@@ -1528,7 +1936,8 @@ class LandCareApp {
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Weather Forecast'
+                        text: 'Weather Forecast',
+                        color: themeColors.textColor
                     }
                 },
                 scales: {
@@ -1536,7 +1945,14 @@ class LandCareApp {
                         display: true,
                         title: {
                             display: true,
-                            text: 'Date'
+                            text: 'Date',
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            color: themeColors.gridColor
                         }
                     },
                     y: {
@@ -1545,7 +1961,14 @@ class LandCareApp {
                         position: 'left',
                         title: {
                             display: true,
-                            text: 'Temperature (°C)'
+                            text: 'Temperature (°C)',
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            color: themeColors.gridColor
                         }
                     },
                     y1: {
@@ -1554,7 +1977,11 @@ class LandCareApp {
                         position: 'right',
                         title: {
                             display: true,
-                            text: 'Precipitation (mm)'
+                            text: 'Precipitation (mm)',
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
                         },
                         grid: {
                             drawOnChartArea: false,
@@ -1576,6 +2003,8 @@ class LandCareApp {
         const ctx = document.getElementById(canvasId);
         if (!ctx) return;
 
+        const themeColors = this.getChartThemeColors();
+
         const datasets = [];
 
         // Temperature with uncertainty
@@ -1583,8 +2012,8 @@ class LandCareApp {
             datasets.push({
                 label: 'Temperature (°C)',
                 data: temperature.values,
-                borderColor: 'rgb(255, 99, 132)',
-                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                borderColor: themeColors.red,
+                backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.2)'),
                 yAxisID: 'y',
                 tension: 0.1
             });
@@ -1594,8 +2023,8 @@ class LandCareApp {
                 datasets.push({
                     label: 'Temp Upper Bound',
                     data: temperature.upper_bound,
-                    borderColor: 'rgba(255, 99, 132, 0.3)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                    borderColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.3)'),
+                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.1)'),
                     fill: false,
                     pointRadius: 0,
                     tension: 0.1
@@ -1603,8 +2032,8 @@ class LandCareApp {
                 datasets.push({
                     label: 'Temp Lower Bound',
                     data: temperature.lower_bound,
-                    borderColor: 'rgba(255, 99, 132, 0.3)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                    borderColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.3)'),
+                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.1)'),
                     fill: '-1', // Fill to previous dataset
                     pointRadius: 0,
                     tension: 0.1
@@ -1617,8 +2046,8 @@ class LandCareApp {
             datasets.push({
                 label: 'Precipitation (mm)',
                 data: precipitation.values,
-                borderColor: 'rgb(54, 162, 235)',
-                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: themeColors.blue,
+                backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.2)'),
                 yAxisID: 'y1',
                 tension: 0.1
             });
@@ -1628,8 +2057,8 @@ class LandCareApp {
                 datasets.push({
                     label: 'Precip Upper Bound',
                     data: precipitation.upper_bound,
-                    borderColor: 'rgba(54, 162, 235, 0.3)',
-                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                    borderColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.3)'),
+                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.1)'),
                     fill: false,
                     pointRadius: 0,
                     tension: 0.1
@@ -1637,8 +2066,8 @@ class LandCareApp {
                 datasets.push({
                     label: 'Precip Lower Bound',
                     data: precipitation.lower_bound,
-                    borderColor: 'rgba(54, 162, 235, 0.3)',
-                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                    borderColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.3)'),
+                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.1)'),
                     fill: false,
                     pointRadius: 0,
                     tension: 0.1
@@ -1651,8 +2080,8 @@ class LandCareApp {
             datasets.push({
                 label: 'Humidity (%)',
                 data: humidity.values,
-                borderColor: 'rgb(75, 192, 192)',
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderColor: themeColors.green,
+                backgroundColor: themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.2)'),
                 yAxisID: 'y2',
                 tension: 0.1
             });
@@ -1674,7 +2103,8 @@ class LandCareApp {
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Weather Forecast with Uncertainty'
+                        text: 'Weather Forecast with Uncertainty',
+                        color: themeColors.textColor
                     }
                 },
                 scales: {
@@ -1682,7 +2112,14 @@ class LandCareApp {
                         display: true,
                         title: {
                             display: true,
-                            text: 'Date'
+                            text: 'Date',
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            color: themeColors.gridColor
                         }
                     },
                     y: {
@@ -1691,7 +2128,14 @@ class LandCareApp {
                         position: 'left',
                         title: {
                             display: true,
-                            text: 'Temperature (°C)'
+                            text: 'Temperature (°C)',
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            color: themeColors.gridColor
                         }
                     },
                     y1: {
@@ -1700,7 +2144,11 @@ class LandCareApp {
                         position: 'right',
                         title: {
                             display: true,
-                            text: 'Precipitation (mm)'
+                            text: 'Precipitation (mm)',
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
                         },
                         grid: {
                             drawOnChartArea: false,
@@ -1712,7 +2160,8 @@ class LandCareApp {
                         position: 'right',
                         title: {
                             display: true,
-                            text: 'Humidity (%)'
+                            text: 'Humidity (%)',
+                            color: themeColors.textColor
                         },
                         grid: {
                             drawOnChartArea: false,
@@ -1721,6 +2170,196 @@ class LandCareApp {
                 }
             }
         });
+    }
+
+    displaySearchBoundingPolygon(boundingbox, displayName, searchTerm) {
+        // boundingbox format from Nominatim: [min_lat, max_lat, min_lon, max_lon] as strings
+        const [minLat, maxLat, minLon, maxLon] = boundingbox.map(coord => parseFloat(coord));
+
+        // Validate bounding box - check if it's not too large (more than 10 degrees span)
+        const latSpan = maxLat - minLat;
+        const lonSpan = maxLon - minLon;
+
+        if (latSpan > 10 || lonSpan > 10) {
+            console.warn('Bounding box too large, skipping polygon display:', { latSpan, lonSpan, boundingbox });
+            this.showError('Search area is too large to display as a polygon. Try searching for a more specific location.');
+            return;
+        }
+
+        // Create polygon coordinates from bounding box
+        const coordinates = [
+            [minLat, minLon], // Southwest
+            [minLat, maxLon], // Southeast
+            [maxLat, maxLon], // Northeast
+            [maxLat, minLon], // Northwest
+            [minLat, minLon]  // Close the polygon
+        ];
+
+        // Remove existing search polygon if any
+        if (this.searchPolygon) {
+            this.mapHandler.map.removeLayer(this.searchPolygon);
+        }
+        if (this.searchPolygonMarker) {
+            this.mapHandler.map.removeLayer(this.searchPolygonMarker);
+        }
+
+        // Create polygon with default styling
+        this.searchPolygon = L.polygon(coordinates, {
+            color: '#2196f3',
+            weight: 3,
+            opacity: 0.8,
+            fillColor: '#2196f3',
+            fillOpacity: 0.2,
+            className: 'search-bounding-polygon'
+        }).addTo(this.mapHandler.map);
+
+        // Add label marker at centroid
+        const centroid = this.mapHandler.getPolygonCentroid({
+            type: 'Polygon',
+            coordinates: [coordinates.map(coord => [coord[1], coord[0]])] // Convert to GeoJSON format
+        });
+
+        this.searchPolygonMarker = L.marker(centroid, {
+            icon: L.divIcon({
+                html: `<div class="search-polygon-label">${displayName}</div>`,
+                className: 'search-polygon-label-container',
+                iconSize: [200, 40],
+                iconAnchor: [100, 20]
+            })
+        }).addTo(this.mapHandler.map);
+
+        // Store polygon data for customization
+        this.searchPolygonData = {
+            coordinates: coordinates,
+            displayName: displayName,
+            searchTerm: searchTerm,
+            boundingbox: boundingbox
+        };
+
+        // Show customization controls
+        this.showPolygonCustomizationControls();
+
+        // Fit map to polygon bounds
+        this.mapHandler.map.fitBounds(this.searchPolygon.getBounds(), { padding: [20, 20] });
+    }
+
+    showPolygonCustomizationControls() {
+        // Remove existing controls if any
+        this.hidePolygonCustomizationControls();
+
+        // Create controls container
+        const controlsContainer = document.createElement('div');
+        controlsContainer.id = 'polygon-customization-controls';
+        controlsContainer.className = 'polygon-controls';
+        controlsContainer.innerHTML = `
+            <div class="polygon-controls-header">
+                <h4>Search Area: ${this.searchPolygonData.displayName}</h4>
+                <button id="close-polygon-controls" class="close-btn">&times;</button>
+            </div>
+            <div class="polygon-controls-body">
+                <div class="control-group">
+                    <label for="polygon-color">Color:</label>
+                    <input type="color" id="polygon-color" value="#2196f3">
+                </div>
+                <div class="control-group">
+                    <label for="polygon-opacity">Opacity:</label>
+                    <input type="range" id="polygon-opacity" min="0.1" max="1" step="0.1" value="0.2">
+                    <span id="opacity-value">0.2</span>
+                </div>
+                <div class="control-group">
+                    <label for="polygon-weight">Border Width:</label>
+                    <input type="range" id="polygon-weight" min="1" max="5" step="1" value="3">
+                    <span id="weight-value">3</span>
+                </div>
+                <div class="polygon-actions">
+                    <button id="edit-polygon" class="btn btn-secondary">Edit Shape</button>
+                    <button id="use-as-base" class="btn btn-primary">Use as Drawing Base</button>
+                    <button id="delete-polygon" class="btn btn-danger">Remove</button>
+                </div>
+            </div>
+        `;
+
+        // Add to map container
+        const mapContainer = document.getElementById('map-container');
+        mapContainer.appendChild(controlsContainer);
+
+        // Add event listeners
+        this.attachPolygonControlEvents();
+    }
+
+    hidePolygonCustomizationControls() {
+        const controls = document.getElementById('polygon-customization-controls');
+        if (controls) {
+            controls.remove();
+        }
+    }
+
+    attachPolygonControlEvents() {
+        // Color change
+        document.getElementById('polygon-color').addEventListener('input', (e) => {
+            const color = e.target.value;
+            this.searchPolygon.setStyle({
+                color: color,
+                fillColor: color
+            });
+        });
+
+        // Opacity change
+        document.getElementById('polygon-opacity').addEventListener('input', (e) => {
+            const opacity = parseFloat(e.target.value);
+            document.getElementById('opacity-value').textContent = opacity;
+            this.searchPolygon.setStyle({
+                fillOpacity: opacity
+            });
+        });
+
+        // Weight change
+        document.getElementById('polygon-weight').addEventListener('input', (e) => {
+            const weight = parseInt(e.target.value);
+            document.getElementById('weight-value').textContent = weight;
+            this.searchPolygon.setStyle({
+                weight: weight
+            });
+        });
+
+        // Edit polygon
+        document.getElementById('edit-polygon').addEventListener('click', () => {
+            // Enable editing mode for the search polygon
+            this.searchPolygon.editing.enable();
+            this.showSuccess('Click and drag polygon vertices to edit shape');
+        });
+
+        // Use as base for drawing
+        document.getElementById('use-as-base').addEventListener('click', () => {
+            // Convert search polygon to drawing polygon
+            this.mapHandler.addPolygonToMap(this.searchPolygonData.coordinates);
+            this.mapHandler.currentPolygon = this.searchPolygonData.coordinates;
+            this.showSuccess('Search area added as drawing base. You can now analyze this area.');
+        });
+
+        // Delete polygon
+        document.getElementById('delete-polygon').addEventListener('click', () => {
+            this.removeSearchPolygon();
+        });
+
+        // Close controls
+        document.getElementById('close-polygon-controls').addEventListener('click', () => {
+            this.hidePolygonCustomizationControls();
+        });
+    }
+
+    removeSearchPolygon() {
+        if (this.searchPolygon) {
+            this.mapHandler.map.removeLayer(this.searchPolygon);
+            this.searchPolygon = null;
+        }
+        if (this.searchPolygonMarker) {
+            this.mapHandler.map.removeLayer(this.searchPolygonMarker);
+            this.searchPolygonMarker = null;
+        }
+        this.searchPolygonData = null;
+        this.hidePolygonCustomizationControls();
+        this.showSuccess('Search area removed');
     }
 
     showError(message) {

@@ -1,8 +1,8 @@
 :root {
     --bg-color: #f5f5f5;
-    --text-color: #333;
+    --text-color: #2c3e50; /* Strong contrast for light mode */
     --header-bg: linear-gradient(135deg, #2e7d32, #4caf50);
-    --panel-bg: white;
+    --panel-bg: #ffffff; /* Explicit white for light mode */
     --border-color: #e0e0e0;
     --button-bg: #4caf50;
     --button-hover: #45a049;
@@ -13,13 +13,36 @@
     --warning-bg: #fff3e0;
     --success-bg: #e8f5e8;
     --error-bg: #ffebee;
+    /* Environmental color palette */
+    --water-blue: #1976d2;
+    --soil-brown: #8d6e63;
+    --vegetation-green: #4caf50;
+    --sky-blue: #e3f2fd;
+    --earth-brown: #a1887f;
+    /* Chart colors for high contrast */
+    --chart-green: #2e7d32;
+    --chart-blue: #1565c0;
+    --chart-orange: #f57c00;
+    /* Typography hierarchy */
+    --font-size-h1: 3rem;
+    --font-size-h2: 2.5rem;
+    --font-size-h3: 1.5rem;
+    --font-size-body: 1rem;
+    --font-size-small: 0.9rem;
+    /* Spacing */
+    --section-padding: 4rem;
+    --card-padding: 2rem;
+    /* Chart theme colors */
+    --chart-bg: #ffffff;
+    --chart-text: #2c3e50;
+    --chart-grid: rgba(0,0,0,0.1);
 }
 
 [data-theme="dark"] {
     --bg-color: #121212;
-    --text-color: #e0e0e0;
+    --text-color: #f5f5f5; /* Off-white for strong contrast in dark mode */
     --header-bg: linear-gradient(135deg, #1b5e20, #2e7d32);
-    --panel-bg: #1e1e1e;
+    --panel-bg: #1e1e1e; /* Dark background for panels */
     --border-color: #333;
     --button-bg: #4caf50;
     --button-hover: #45a049;
@@ -30,6 +53,10 @@
     --warning-bg: #4a3c1c;
     --success-bg: #1c4a1c;
     --error-bg: #4a1c1c;
+    /* Chart theme colors for dark mode */
+    --chart-bg: #1e1e1e;
+    --chart-text: #f5f5f5;
+    --chart-grid: rgba(255,255,255,0.2);
 }
 
 * {
@@ -43,7 +70,16 @@ body {
     background-color: var(--bg-color);
     color: var(--text-color);
     transition: background-color 0.3s, color 0.3s;
+    font-size: var(--font-size-body);
+    line-height: 1.6;
 }
+
+/* Typography Hierarchy */
+h1 { font-size: var(--font-size-h1); font-weight: 700; margin-bottom: 1.5rem; }
+h2 { font-size: var(--font-size-h2); font-weight: 600; margin-bottom: 1.5rem; }
+h3 { font-size: var(--font-size-h3); font-weight: 500; margin-bottom: 1rem; }
+p { font-size: var(--font-size-body); margin-bottom: 1rem; }
+small { font-size: var(--font-size-small); }
 
 #app {
     display: flex;
@@ -61,7 +97,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 4rem 2rem;
+    padding: var(--section-padding) 2rem;
     text-align: center;
     height: 500px;
 }
@@ -80,7 +116,7 @@ body {
 }
 
 .hero-content p {
-    font-size: 1.5rem;
+    font-size: var(--font-size-body);
     margin-bottom: 2rem;
     opacity: 0.9;
     line-height: 1.5;
@@ -161,7 +197,7 @@ body {
     text-align: center;
     margin-bottom: 3rem;
     font-size: 2.5rem;
-    color: #2e7d32;
+    color: var(--text-color);
 }
 
 .features-grid {
@@ -174,11 +210,12 @@ body {
 
 .feature-card {
     background: var(--panel-bg);
-    padding: 2rem;
+    padding: var(--card-padding);
     border-radius: 12px;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     text-align: center;
     transition: transform 0.3s, box-shadow 0.3s;
+    border: 1px solid var(--border-color);
 }
 
 .feature-card:hover {
@@ -188,14 +225,12 @@ body {
 
 .feature-card i {
     font-size: 3rem;
-    color: #4caf50;
+    color: var(--vegetation-green);
     margin-bottom: 1rem;
 }
 
 .feature-card h3 {
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-    color: #2e7d32;
+    color: var(--vegetation-green);
 }
 
 .feature-card p {
@@ -213,7 +248,7 @@ body {
     text-align: center;
     margin-bottom: 1rem;
     font-size: 2.5rem;
-    color: #2e7d32;
+    color: var(--text-color);
 }
 
 .status-indicator {
@@ -320,7 +355,8 @@ input[type="text"] {
 }
 
 input[type="text"]:focus {
-    outline: none;
+    outline: 2px solid var(--water-blue);
+    outline-offset: 2px;
     border-color: var(--button-bg);
     box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
 }
@@ -367,7 +403,7 @@ button:disabled {
     padding: 1rem;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    z-index: 1000;
+    z-index: 500;
     max-width: 200px;
     font-size: 0.8rem;
     color: var(--text-color);
@@ -375,7 +411,7 @@ button:disabled {
 
 .map-legend h4 {
     margin: 0 0 0.5rem 0;
-    color: #2e7d32;
+    color: var(--text-color);
     font-size: 0.9rem;
 }
 
@@ -423,7 +459,7 @@ button:disabled {
 
 #results-panel h3 {
     margin: 0;
-    color: #2e7d32;
+    color: var(--text-color);
 }
 
 .risk-indicator {
@@ -476,6 +512,7 @@ button:disabled {
     border-bottom: 2px solid transparent;
     transition: all 0.3s;
     font-size: 0.9rem;
+    color: var(--text-color);
 }
 
 .tab-button:hover {
@@ -483,8 +520,8 @@ button:disabled {
 }
 
 .tab-button.active {
-    border-bottom-color: #4caf50;
-    color: #4caf50;
+    border-bottom-color: var(--button-bg);
+    color: var(--button-bg);
     font-weight: bold;
 }
 
@@ -577,7 +614,7 @@ button:disabled {
 
 .stat-value {
     font-weight: bold;
-    color: #2e7d32;
+    color: var(--text-color);
     font-size: 1rem;
 }
 
@@ -761,7 +798,7 @@ button:disabled {
 
 .agricultural-insights h4 {
     margin: 0 0 0.5rem 0;
-    color: #2e7d32;
+    color: var(--text-color);
 }
 
 .insight-item {
@@ -826,7 +863,7 @@ button:disabled {
 }
 
 .success {
-    color: #2e7d32;
+    color: var(--text-color);
     background: var(--success-bg);
     padding: 1rem;
     border-radius: 4px;
@@ -849,7 +886,7 @@ button:disabled {
 }
 
 .metric-value {
-    color: #2e7d32;
+    color: var(--text-color);
 }
 
 /* Future Section */
@@ -862,7 +899,7 @@ button:disabled {
     text-align: center;
     margin-bottom: 3rem;
     font-size: 2.5rem;
-    color: #2e7d32;
+    color: var(--text-color);
 }
 
 .charts-container {
@@ -883,7 +920,7 @@ button:disabled {
 
 .chart-item h3 {
     margin-bottom: 1rem;
-    color: #2e7d32;
+    color: var(--text-color);
 }
 
 .chart-item canvas {
@@ -893,19 +930,18 @@ button:disabled {
 
 /* CTA Footer */
 .cta-footer {
-    background: linear-gradient(135deg, #2e7d32, #4caf50);
+    background: linear-gradient(135deg, var(--vegetation-green), var(--water-blue));
     color: white;
-    padding: 4rem 2rem;
+    padding: var(--section-padding) 2rem;
     text-align: center;
 }
 
 .cta-footer h2 {
-    font-size: 2.5rem;
     margin-bottom: 1rem;
 }
 
 .cta-footer p {
-    font-size: 1.2rem;
+    font-size: var(--font-size-body);
     margin-bottom: 2rem;
     opacity: 0.9;
 }
@@ -914,28 +950,35 @@ button:disabled {
     display: inline-block;
     padding: 1rem 2rem;
     background: white;
-    color: #2e7d32;
+    color: var(--vegetation-green);
     text-decoration: none;
     border-radius: 8px;
     font-weight: bold;
-    font-size: 1.1rem;
+    font-size: var(--font-size-body);
     transition: all 0.3s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .cta-button:hover {
     background: rgba(255, 255, 255, 0.9);
     transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.cta-button:focus {
+    outline: 2px solid white;
+    outline-offset: 2px;
 }
 
 /* Navigation */
 .main-nav {
-    position: fixed;
+    position: sticky;
     top: 0;
     left: 0;
     right: 0;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
-    z-index: 1000;
+    z-index: 1000 !important;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     transition: all 0.3s ease;
 }
@@ -975,7 +1018,7 @@ button:disabled {
 
 [data-theme="dark"] .theme-toggle-btn {
     border-color: #e0e0e0;
-    color: #e0e0e0;
+    color: #555;
 }
 
 [data-theme="dark"] .theme-toggle-btn:hover {
@@ -1029,16 +1072,16 @@ button:disabled {
 
 .nav-menu li a {
     text-decoration: none;
-    color: #333;
+    color: #333333;
     font-weight: 500;
-    transition: color 0.3s ease;
+    transition: color 0.3s ease, transform 0.2s ease;
     padding: 0.5rem 0;
     position: relative;
 }
 
 .nav-menu li a:hover,
 .nav-menu li a.active {
-    color: #4caf50;
+    color: var(--button-bg);
 }
 
 .nav-menu li a::after {
@@ -1048,7 +1091,7 @@ button:disabled {
     left: 0;
     width: 0;
     height: 2px;
-    background: #4caf50;
+    background: var(--button-bg);
     transition: width 0.3s ease;
 }
 
@@ -1069,6 +1112,10 @@ button:disabled {
     height: 3px;
     background: #333;
     transition: 0.3s;
+}
+
+#user-email {
+    color: #000000;
 }
 
 /* Container */
@@ -1126,11 +1173,11 @@ button:disabled {
 }
 
 /* Leaflet Draw Cursor Overrides */
-.leaflet-draw-draw-polygon {
+.leaflet-container.leaflet-draw-draw-polygon {
     cursor: crosshair !important;
 }
 
-.leaflet-draw-draw-polygon.leaflet-draw-draw-ready {
+.leaflet-container.leaflet-draw-draw-polygon.leaflet-draw-draw-ready {
     cursor: crosshair !important;
 }
 
@@ -1146,10 +1193,19 @@ button:disabled {
     cursor: pointer !important;
 }
 
+/* Leaflet Controls Z-Index */
+.leaflet-control {
+    z-index: 400 !important;
+}
+
+.leaflet-control-attribution {
+    z-index: 100 !important;
+}
+
 /* Polygon Risk Tags */
 .polygon-risk-tag-container {
     pointer-events: none;
-    z-index: 1000;
+    z-index: 500;
 }
 
 .polygon-risk-tag {
@@ -1200,13 +1256,13 @@ button:disabled {
 
 .land-cover-type {
     font-weight: 500;
-    color: #2e7d32;
+    color: var(--text-color);
     flex: 1;
 }
 
 .land-cover-value {
     font-weight: 600;
-    color: #2e7d32;
+    color: var(--text-color);
     text-align: right;
     flex: 1;
 }
@@ -1230,33 +1286,226 @@ button:disabled {
 
 /* Early Warnings */
 .early-warning-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 8px 0;
-    border-bottom: 1px solid #ffebee;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+    transition: all 0.3s ease;
 }
 
-.early-warning-item:last-child {
-    border-bottom: none;
+.early-warning-item:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.early-warning-item.critical-warning {
+    border-left: 4px solid #d32f2f;
+    background: linear-gradient(90deg, rgba(211, 47, 47, 0.05), var(--panel-bg));
+}
+
+.early-warning-item.medium-warning {
+    border-left: 4px solid #f57c00;
+    background: linear-gradient(90deg, rgba(245, 124, 0, 0.05), var(--panel-bg));
+}
+
+.early-warning-item.low-warning {
+    border-left: 4px solid #4caf50;
+    background: linear-gradient(90deg, rgba(76, 175, 80, 0.05), var(--panel-bg));
+}
+
+.warning-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .warning-icon {
-    font-size: 1.2em;
+    font-size: 1.4em;
+    margin-right: 8px;
     flex-shrink: 0;
 }
 
 .warning-text {
-    font-size: 0.9em;
-    color: #d32f2f;
+    font-size: 0.95em;
+    color: var(--text-color);
     line-height: 1.4;
+    margin: 0;
+}
+
+.warning-recommendations {
+    margin-top: 8px;
+}
+
+.warning-recommendations ul {
+    margin: 4px 0 0 0;
+    padding-left: 20px;
+    list-style-type: disc;
+}
+
+.warning-recommendations li {
+    font-size: 0.9em;
+    color: var(--text-color);
+    margin-bottom: 4px;
+    line-height: 1.3;
+}
+
+.warning-location {
+    font-size: 0.85em;
+    color: #666;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--border-color);
 }
 
 .no-warnings {
-    padding: 12px 0;
+    padding: 20px;
     color: #666;
     font-style: italic;
     text-align: center;
+    background: var(--success-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+/* Search Polygon Styles */
+.search-bounding-polygon {
+    z-index: 400;
+}
+
+.search-polygon-label-container {
+    pointer-events: none;
+    z-index: 450;
+}
+
+.search-polygon-label {
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid #2196f3;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #2196f3;
+    text-align: center;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    backdrop-filter: blur(4px);
+}
+
+/* Polygon Customization Controls */
+.polygon-controls {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 500;
+    min-width: 280px;
+    max-width: 320px;
+}
+
+.polygon-controls-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-color);
+    border-radius: 8px 8px 0 0;
+}
+
+.polygon-controls-header h4 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--text-color);
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-color);
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.close-btn:hover {
+    background: rgba(0,0,0,0.1);
+}
+
+.polygon-controls-body {
+    padding: 16px;
+}
+
+.control-group {
+    margin-bottom: 12px;
+}
+
+.control-group label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 500;
+    color: var(--text-color);
+    font-size: 0.9rem;
+}
+
+.control-group input[type="color"] {
+    width: 50px;
+    height: 30px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.control-group input[type="range"] {
+    width: 100%;
+    max-width: 120px;
+    margin-right: 8px;
+}
+
+.control-group span {
+    font-size: 0.8rem;
+    color: var(--text-color);
+    min-width: 20px;
+    display: inline-block;
+}
+
+.polygon-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.polygon-actions .btn {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.polygon-actions .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.btn-danger {
+    background: #f44336;
+    color: white;
+    border: 1px solid #f44336;
+}
+
+.btn-danger:hover {
+    background: #d32f2f;
 }
 
 /* Responsive Design */
@@ -1350,6 +1599,11 @@ button:disabled {
     .risk-meter {
         min-width: 150px;
         max-width: 200px;
+    }
+
+    .basic-statistics {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
     }
 }
 

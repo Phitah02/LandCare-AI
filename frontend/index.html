@@ -92,14 +92,14 @@
         </div>
     </div>
 
-    <div id="app">
+    <main id="app">
         <section id="hero" class="hero-section">
             <div class="hero-content">
                 <h1>See Your Local Environment. Understand Its Future.</h1>
                 <p>Explore the health of your community's land, forecast environmental changes, and discover how you can contribute to a greener future.</p>
                 <div class="hero-actions">
-                    <button class="btn-primary">Explore Your Area</button>
-                    <button class="btn-secondary">Learn More</button>
+                    <button class="btn-primary" aria-label="Explore your area for land analysis">Explore Your Area</button>
+                    <button class="btn-secondary" aria-label="Learn more about LandCare AI">Learn More</button>
                 </div>
             </div>
         </section>
@@ -136,13 +136,13 @@
                 </div>
                 <div id="toolbar">
                     <div id="roi-input-container">
-                        <input type="text" id="roi-input" placeholder="Enter place name (e.g., Kajiado County, Nairobi)" />
-                        <button id="search-location">Search Location</button>
+                        <input type="text" id="roi-input" placeholder="Enter location: Nairobi County" aria-label="Enter location name for search" />
+                        <button id="search-location" aria-label="Search for the entered location">Search Location</button>
                     </div>
                     <div id="drawing-controls">
-                        <button id="draw-polygon">Draw Polygon</button>
-                        <button id="clear-drawings">Clear/Reset</button>
-                        <button id="analyze">Analyze</button>
+                        <button id="draw-polygon" aria-label="Draw polygon on map for analysis">Draw Polygon</button>
+                        <button id="clear-drawings" aria-label="Clear all drawings and reset map">Clear/Reset</button>
+                        <button id="analyze" aria-label="Analyze the selected polygon area">Analyze</button>
                     </div>
                 </div>
 
@@ -270,8 +270,8 @@
                                     </div>
                                 </div>
                                 <div class="chart-container">
-                                    <canvas id="historical-ndvi-chart" width="400" height="200"></canvas>
-                                    <canvas id="historical-weather-chart" width="400" height="200"></canvas>
+                                    <canvas id="historical-ndvi-chart" width="400" height="200" aria-label="Historical Vegetation Indices Chart"></canvas>
+                                    <canvas id="historical-weather-chart" width="400" height="200" aria-label="Historical Weather Data Chart"></canvas>
                                 </div>
                                 <div class="historical-stats">
                                     <div class="stat-card">
@@ -316,8 +316,8 @@
                                     </div>
                                 </div>
                                 <div class="chart-container">
-                                    <canvas id="forecast-ndvi-chart" width="400" height="200"></canvas>
-                                    <canvas id="forecast-weather-chart" width="400" height="200"></canvas>
+                                    <canvas id="forecast-ndvi-chart" width="400" height="200" aria-label="Forecasted Vegetation Indices Chart"></canvas>
+                                    <canvas id="forecast-weather-chart" width="400" height="200" aria-label="Forecasted Weather Data Chart"></canvas>
                                 </div>
                                 <div class="forecast-info">
                                     <div class="stat-card">
@@ -399,35 +399,29 @@
             </div>
         </section>
 
-        <section id="future" class="py-16 bg-background-light dark:bg-background-dark">
-            <div class="container mx-auto px-4 text-center">
-                <h2 class="text-4xl font-bold mb-12 text-text-light dark:text-text-dark">What Does the Future Hold?</h2>
-                <p class="text-lg mb-10 text-text-secondary-light dark:text-text-secondary-dark max-w-3xl mx-auto">
-                    Our AI models predict potential environmental changes under different scenarios, helping us prepare and act proactively.
-                </p>
-                <div class="grid md:grid-cols-2 gap-8 items-center">
-                    <div class="bg-surface-light dark:bg-surface-dark p-6 rounded-lg shadow-lg border border-border-light dark:border-border-dark">
-                        <h3 class="text-2xl font-semibold mb-4 text-text-light dark:text-text-dark">Predicted Vegetation Health (5 Years)</h3>
-                        <p class="text-text-secondary-light dark:text-text-secondary-dark mb-4">
-                            How green will our future be? This chart shows projected changes in vegetation density.
-                        </p>
-                        <canvas height="199" id="futureVegetationChart" style="display: block; box-sizing: border-box; height: 199px; width: 299px;" width="299"></canvas>
-                        <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-4 text-left">
-                            <span class="material-symbols-outlined text-base align-middle text-blue-500 mr-1">info</span>
+        <section id="future" class="future-section">
+            <div class="container">
+                <h2>What Does the Future Hold?</h2>
+                <p>Our AI models predict potential environmental changes under different scenarios, helping us prepare and act proactively.</p>
+                <div class="charts-container">
+                    <article class="chart-item">
+                        <h3>Predicted Vegetation Health (5 Years)</h3>
+                        <p>How green will our future be? This chart shows projected changes in vegetation density.</p>
+                        <canvas id="futureVegetationChart" width="400" height="200" aria-label="Predicted Vegetation Health Chart for 5 Years"></canvas>
+                        <p class="chart-info">
+                            <i class="fas fa-info-circle" aria-hidden="true"></i>
                             Projection based on current trends and climate models.
                         </p>
-                    </div>
-                    <div class="bg-surface-light dark:bg-surface-dark p-6 rounded-lg shadow-lg border border-border-light dark:border-border-dark">
-                        <h3 class="text-2xl font-semibold mb-4 text-text-light dark:text-text-dark">Future Soil Erosion Risk (Scenario A)</h3>
-                        <p class="text-text-secondary-light dark:text-text-secondary-dark mb-4">
-                            Understanding potential erosion helps us implement preventative measures.
-                        </p>
-                        <canvas height="199" id="futureErosionChart" width="299" style="display: block; box-sizing: border-box; height: 199px; width: 299px;"></canvas>
-                        <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-4 text-left">
-                            <span class="material-symbols-outlined text-base align-middle text-blue-500 mr-1">info</span>
+                    </article>
+                    <article class="chart-item">
+                        <h3>Future Soil Erosion Risk (Scenario A)</h3>
+                        <p>Understanding potential erosion helps us implement preventative measures.</p>
+                        <canvas id="futureErosionChart" width="400" height="200" aria-label="Future Soil Erosion Risk Chart Scenario A"></canvas>
+                        <p class="chart-info">
+                            <i class="fas fa-info-circle" aria-hidden="true"></i>
                             Scenario A: Moderate rainfall increase with minimal human intervention.
                         </p>
-                    </div>
+                    </article>
                 </div>
             </div>
         </section>
@@ -436,10 +430,10 @@
             <div class="container">
                 <h2>Be part of the solution</h2>
                 <p>Join us in protecting our land and environment.</p>
-                <a href="#explore" class="cta-button">Start Exploring</a>
+                <a href="#explore" class="cta-button" aria-label="Start exploring land analysis">Start Exploring</a>
             </div>
         </footer>
-    </div>
+    </main>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
