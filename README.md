@@ -257,7 +257,7 @@ GitHub: [@Phitah02](https://github.com/Phitah02)
 LinkedIn: [Peter Kamau Mwaura](https://www.linkedin.com/in/peter-kamau-mwaura-aa748b241)
 
 ## Last Updated
-15th November 2024
+15th November 2025
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
