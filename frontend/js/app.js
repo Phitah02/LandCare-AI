@@ -2005,6 +2005,13 @@ class LandCareApp {
 
             // Now forecast
             const months = parseInt(document.getElementById('forecast-months-select')?.value) || 12; // Get from UI or default to 12
+
+            // Transform historical data to match forecast function expectations
+            const historicalForForecast = {
+                dates: historicalData.dates,
+                values: historicalData.ndvi_values
+            };
+
             const forecastResponse = await fetch('https://landcare-ai-1.onrender.com/forecast/vis', {
                 method: 'POST',
                 headers: {
@@ -2012,7 +2019,7 @@ class LandCareApp {
                     'Authorization': `Bearer ${this.authToken}`
                 },
                 body: JSON.stringify({
-                    historical_ndvi: historicalData,
+                    historical_ndvi: historicalForForecast,
                     months: months,
                     geometry: geometry
                 })
