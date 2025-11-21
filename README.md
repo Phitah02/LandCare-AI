@@ -26,10 +26,10 @@ LandCare AI is a comprehensive multi-section web application for land analysis, 
 ## Screenshots
 
 ### LandCare AI Logo
-![LandCare AI Logo](frontend/assets/LandCare%20AI%20logo.png)
+<img src="frontend/assets/LandCare%20AI%20logo.png" alt="LandCare AI Logo" width="300">
 
 ### Profile Image
-![Profile Image](frontend/assets/profile-image.png)
+<img src="frontend/assets/profile-image.png" alt="Profile Image" width="300">
 
 ### Historical Analysis
 <img src="screenshots/historical%20analysis.png" alt="Historical Analysis" width="800">
