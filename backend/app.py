@@ -1,5 +1,5 @@
 import asyncio
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from config.config import Config
 from gee_processor import initialize_gee, get_ndvi, get_evi, get_savi, get_land_cover, get_slope_data, calculate_risk_score, get_historical_ndvi, get_historical_evi, get_historical_savi
@@ -30,6 +30,12 @@ gee_initialized = initialize_gee()
 
 # Global task storage for background tasks
 background_tasks = {}
+
+@app.after_request
+def after_request(response):
+    response.headers['Access-Control-Allow-Origin'] = 'https://landcare-ai-frontend.onrender.com'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    return response
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -443,7 +449,12 @@ def historical_savi():
 @app.route('/historical/weather/<float:lat>/<float:lon>', methods=['OPTIONS'])
 def historical_weather_options(lat, lon):
     """Handle CORS preflight requests for historical weather endpoint."""
-    return '', 200
+    response = make_response('', 200)
+    response.headers['Access-Control-Allow-Origin'] = 'https://landcare-ai-frontend.onrender.com'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Authorization'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    return response
 
 @app.route('/historical/weather/<float:lat>/<float:lon>', methods=['GET'])
 @token_required
@@ -574,10 +585,22 @@ def historical_weather(lat, lon):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/forecast/vis', methods=['POST'])
-@token_required
+@app.route('/forecast/vis', methods=['OPTIONS', 'POST'])
 def forecast_vis_endpoint():
     """Forecast Vegetation Indices (NDVI, EVI, SAVI) using historical data with SARIMA model."""
+    if request.method == 'OPTIONS':
+        response = make_response('', 200)
+        response.headers['Access-Control-Allow-Origin'] = 'https://landcare-ai-frontend.onrender.com'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    # For POST requests, apply token_required
+    return _forecast_vis_with_token()
+
+@token_required
+def _forecast_vis_with_token():
     try:
         data = request.get_json()
         historical_ndvi = data.get('historical_ndvi')
@@ -673,10 +696,22 @@ async def run_ndvi_forecast_async(task_id, geometry, months, user_id):
             'end_time': time.time()
         }
 
-@app.route('/forecast/weather/<float:lat>/<float:lon>', methods=['GET'])
-@token_required
+@app.route('/forecast/weather/<float:lat>/<float:lon>', methods=['OPTIONS', 'GET'])
 def forecast_weather_endpoint(lat, lon):
     """Forecast weather for coordinates synchronously with uncertainty bands."""
+    if request.method == 'OPTIONS':
+        response = make_response('', 200)
+        response.headers['Access-Control-Allow-Origin'] = 'https://landcare-ai-frontend.onrender.com'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Authorization'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    # For GET requests, apply token_required
+    return _forecast_weather_with_token(lat, lon)
+
+@token_required
+def _forecast_weather_with_token(lat, lon):
     try:
         days = int(request.args.get('days', 5))  # Default to 5 days, max 5
         user_id = request.user_id
