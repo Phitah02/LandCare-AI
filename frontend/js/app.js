@@ -39,7 +39,7 @@ class LandCareApp {
 
     async validateToken() {
         try {
-            const response = await fetch('http://localhost:5000/auth/me', {
+            const response = await fetch('https://landcare-ai-1.onrender.com/auth/me', {
                 headers: {
                     'Authorization': `Bearer ${this.authToken}`
                 }
@@ -72,7 +72,7 @@ class LandCareApp {
 
     async login(email, password) {
         try {
-            const response = await fetch('http://localhost:5000/auth/login', {
+            const response = await fetch('https://landcare-ai-1.onrender.com/auth/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -104,7 +104,7 @@ class LandCareApp {
         }
 
         try {
-            const response = await fetch('http://localhost:5000/auth/register', {
+            const response = await fetch('https://landcare-ai-1.onrender.com/auth/register', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -313,7 +313,7 @@ class LandCareApp {
             const geometry = this.mapHandler.currentPolygonLayer.toGeoJSON().geometry;
             const centroid = this.mapHandler.getPolygonCentroid(geometry);
 
-            const response = await fetch('http://localhost:5000/analyze', {
+            const response = await fetch('https://landcare-ai-1.onrender.com/analyze', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -625,7 +625,7 @@ class LandCareApp {
         searchBtn.textContent = 'Searching...';
 
         try {
-            const response = await fetch('http://localhost:5000/geocode', {
+            const response = await fetch('https://landcare-ai-1.onrender.com/geocode', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -1332,7 +1332,7 @@ class LandCareApp {
     checkConnectionStatus() {
         this.updateStatus('checking', 'idle', 'Checking backend connection...');
 
-        fetch('http://localhost:5000/health')
+        fetch('https://landcare-ai-1.onrender.com/health')
             .then(response => response.json())
             .then(data => {
                 console.log('Backend health:', data);
@@ -1904,7 +1904,7 @@ class LandCareApp {
             const geometry = this.mapHandler.currentPolygonLayer.toGeoJSON().geometry;
             const months = parseInt(document.getElementById('historical-months-select')?.value) || 12; // Get from UI or default to 12
 
-            const response = await fetch('http://localhost:5000/historical/vis', {
+            const response = await fetch('https://landcare-ai-1.onrender.com/historical/vis', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1948,7 +1948,7 @@ class LandCareApp {
             const centroid = this.mapHandler.getPolygonCentroid(this.mapHandler.currentPolygonLayer.toGeoJSON().geometry);
             const days = parseInt(document.getElementById('historical-days-select')?.value) || 5; // Get from UI or default to 5
 
-            const response = await fetch(`http://localhost:5000/historical/weather/${centroid[0]}/${centroid[1]}?days=${days}`, {
+            const response = await fetch(`https://landcare-ai-1.onrender.com/historical/weather/${centroid[0]}/${centroid[1]}?days=${days}`, {
                 headers: {
                     'Authorization': `Bearer ${this.authToken}`
                 }
@@ -1986,7 +1986,7 @@ class LandCareApp {
             // First get historical data for forecasting
             const geometry = this.mapHandler.currentPolygonLayer.toGeoJSON().geometry;
             const historicalMonths = parseInt(document.getElementById('forecast-historical-months-select')?.value) || 12;
-            const historicalResponse = await fetch('http://localhost:5000/historical/vis', {
+            const historicalResponse = await fetch('https://landcare-ai-1.onrender.com/historical/vis', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2005,7 +2005,7 @@ class LandCareApp {
 
             // Now forecast
             const months = parseInt(document.getElementById('forecast-months-select')?.value) || 12; // Get from UI or default to 12
-            const forecastResponse = await fetch('http://localhost:5000/forecast/vis', {
+            const forecastResponse = await fetch('https://landcare-ai-1.onrender.com/forecast/vis', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2049,7 +2049,7 @@ class LandCareApp {
             const centroid = this.mapHandler.getPolygonCentroid(this.mapHandler.currentPolygonLayer.toGeoJSON().geometry);
             const days = parseInt(document.getElementById('forecast-days-select')?.value) || 5; // Get from UI or default to 5
 
-            const response = await fetch(`http://localhost:5000/forecast/weather/${centroid[0]}/${centroid[1]}?days=${days}`, {
+            const response = await fetch(`https://landcare-ai-1.onrender.com/forecast/weather/${centroid[0]}/${centroid[1]}?days=${days}`, {
                 headers: {
                     'Authorization': `Bearer ${this.authToken}`
                 }
