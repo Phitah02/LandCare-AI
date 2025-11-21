@@ -1,4 +1,7 @@
 # LandCare AI - Land Analysis Platform
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
+[![Flask](https://img.shields.io/badge/Flask-2.0+-red.svg)](https://flask.palletsprojects.com/)
 
 ## Overview
 
@@ -20,6 +23,25 @@ LandCare AI is a comprehensive multi-section web application for land analysis, 
 - **Responsive Design**: Optimized for desktop and mobile devices.
 - **CTA Footer**: Call-to-action section encouraging user engagement.
 
+## Screenshots
+
+### LandCare AI Logo
+![LandCare AI Logo](frontend/assets/LandCare%20AI%20logo.png)
+
+### Profile Image
+![Profile Image](frontend/assets/profile-image.png)
+
+### Historical Analysis
+<img src="screenshots/historical%20analysis.png" alt="Historical Analysis" width="800">
+*Historical Analysis Page*
+
+### Home Page
+<img src="screenshots/home%20page.jpeg" alt="Home Page" width="800">
+*Home Page*
+
+### Login Page
+<img src="screenshots/login%20page.png" alt="Login Page" width="800">
+*Login Page*
 ### Core Functionality
 - **User Authentication**: JWT-based authentication system with secure password hashing.
 - **Interactive Map**: Users draw polygons using Leaflet.js and Leaflet.Draw on the frontend.
@@ -32,11 +54,18 @@ LandCare AI is a comprehensive multi-section web application for land analysis, 
 - **Machine Learning**: ARIMA time series forecasting for vegetation and weather predictions.
 - **Visualization**: Results displayed in tabbed panels with metrics, charts, risk indicators, and early warnings.
 
-### Architecture
-```
-Frontend (Leaflet.js) ↔ Backend (Flask API) ↔ Google Earth Engine ↔ OpenWeatherMap
-     ↓
-User draws polygon → GeoJSON → GEE Processing → Visualization
+## Architecture
+
+```mermaid
+graph TD
+    A[User] --> B[Frontend<br/>Leaflet.js]
+    B --> C[Backend<br/>Flask API]
+    C --> D[Google Earth Engine]
+    C --> E[OpenWeatherMap]
+    C --> F[Supabase Database]
+    D --> G[Satellite & Vegetation Data]
+    E --> H[Weather Data]
+    F --> I[User Data & Analysis Results]
 ```
 
 ## Project Structure
@@ -239,8 +268,14 @@ Row Level Security (RLS) is enabled on all tables except users, with policies en
 - Testing: Run authentication and database tests with provided test files.
 - Add features: Enhance forecasting models, add more vegetation indices, implement real-time monitoring.
 
-### 8. Deployment
-- **Backend**: Deploy Flask to Heroku, Vercel, or Google Cloud Run. Set env vars securely.
+## Deployment
+
+### Live Website
+- **Production**: https://landcare-ai-frontend.onrender.com
+- **Staging**: https://land-care-ai-dl98.vercel.app
+
+### Deployment Instructions
+- **Backend**: Deploy Flask to Heroku, Vercel, or Google Cloud Run. Set environment variables securely.
 - **Frontend**: Host static files on Netlify, Vercel, or GitHub Pages.
 - **Database**: Supabase handles user data and analysis storage automatically.
 
