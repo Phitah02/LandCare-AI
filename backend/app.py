@@ -440,7 +440,12 @@ def historical_savi():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['GET', 'OPTIONS'])
+@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['OPTIONS'])
+def historical_weather_options(lat, lon):
+    """Handle CORS preflight requests for historical weather endpoint."""
+    return '', 200
+
+@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['GET'])
 @token_required
 def historical_weather(lat, lon):
     """Get historical weather data for coordinates with caching."""
