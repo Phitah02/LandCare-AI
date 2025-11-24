@@ -7,7 +7,6 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key')
     GEE_SERVICE_ACCOUNT = os.getenv('GEE_SERVICE_ACCOUNT')
     GEE_PRIVATE_KEY = os.getenv('GEE_PRIVATE_KEY')
-    OPENWEATHER_API_KEY = os.getenv('OPENWEATHER_API_KEY')
     FLASK_ENV = os.getenv('FLASK_ENV', 'development')
     DEBUG = FLASK_ENV == 'development'
 

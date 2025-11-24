@@ -18,16 +18,33 @@ def get_weather_data(lat, lon):
     except Exception as e:
         return {'error': str(e)}
 
-def get_weather_forecast(lat, lon):
-    """Get 5-day weather forecast with agricultural insights."""
+def get_weather_forecast(lat, lon, api_key=None):
+    """Get 5-day weather forecast with agricultural insights using Open-Meteo API."""
     try:
-        url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={Config.OPENWEATHER_API_KEY}&units=metric"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        
+        # Open-Meteo forecast API - weather data provided by Open-Meteo (https://open-meteo.com/), licensed under CC BY 4.0
+        url = (
+            f"https://api.open-meteo.com/v1/forecast?"
+            f"latitude={lat}&longitude={lon}&"
+            f"hourly=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,soil_temperature_0_to_7cm,soil_moisture_0_to_7cm&"
+            f"timezone=Africa/Nairobi"
+        )
+
+        # Retry logic for transient failures
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                break
+            except requests.RequestException as e:
+                if attempt == max_retries - 1:
+                    raise e
+                import time
+                time.sleep(1 * (attempt + 1))  # Exponential backoff
+
         # Process forecast data for agricultural insights
-        processed_forecast = process_forecast_data(data)
+        processed_forecast = process_openmeteo_forecast_data(data)
         return processed_forecast
     except Exception as e:
         return {'error': str(e)}
@@ -74,9 +91,9 @@ def process_forecast_data(forecast_data):
     try:
         if 'error' in forecast_data:
             return forecast_data
-        
+
         processed = forecast_data.copy()
-        
+
         # Group forecasts by day
         daily_forecasts = {}
         for item in forecast_data['list']:
@@ -84,14 +101,14 @@ def process_forecast_data(forecast_data):
             if date not in daily_forecasts:
                 daily_forecasts[date] = []
             daily_forecasts[date].append(item)
-        
+
         # Calculate daily agricultural summaries
         daily_summaries = {}
         for date, forecasts in daily_forecasts.items():
             temps = [f['main']['temp'] for f in forecasts]
             humidities = [f['main']['humidity'] for f in forecasts]
             precipitations = [f.get('rain', {}).get('3h', 0) for f in forecasts]
-            
+
             daily_summaries[date] = {
                 'date': date,
                 'avg_temp': sum(temps) / len(temps),
@@ -101,7 +118,77 @@ def process_forecast_data(forecast_data):
                 'total_precipitation': sum(precipitations),
                 'agricultural_risk': assess_daily_agricultural_risk(temps, humidities, precipitations)
             }
-        
+
+        processed['daily_summaries'] = daily_summaries
+        return processed
+    except Exception as e:
+        forecast_data['error'] = str(e)
+        return forecast_data
+
+def process_openmeteo_forecast_data(forecast_data):
+    """Process Open-Meteo forecast data for agricultural planning."""
+    try:
+        if 'error' in forecast_data:
+            return forecast_data
+
+        processed = forecast_data.copy()
+
+        # Extract hourly data
+        times = forecast_data.get('hourly', {}).get('time', [])
+        temperatures = forecast_data.get('hourly', {}).get('temperature_2m', [])
+        humidities = forecast_data.get('hourly', {}).get('relative_humidity_2m', [])
+        precipitations = forecast_data.get('hourly', {}).get('precipitation', [])
+        wind_speeds = forecast_data.get('hourly', {}).get('wind_speed_10m', [])
+        soil_temps = forecast_data.get('hourly', {}).get('soil_temperature_0_to_7cm', [])
+        soil_moistures = forecast_data.get('hourly', {}).get('soil_moisture_0_to_7cm', [])
+
+        if not times:
+            return {'error': 'No hourly data available'}
+
+        # Group by date
+        daily_forecasts = {}
+        for i, time_str in enumerate(times):
+            date = time_str.split('T')[0]  # Extract date from ISO format
+            if date not in daily_forecasts:
+                daily_forecasts[date] = {
+                    'temps': [],
+                    'humidities': [],
+                    'precipitations': [],
+                    'wind_speeds': [],
+                    'soil_temps': [],
+                    'soil_moistures': []
+                }
+
+            daily_forecasts[date]['temps'].append(temperatures[i] if i < len(temperatures) and temperatures[i] is not None else 0)
+            daily_forecasts[date]['humidities'].append(humidities[i] if i < len(humidities) and humidities[i] is not None else 0)
+            daily_forecasts[date]['precipitations'].append(precipitations[i] if i < len(precipitations) and precipitations[i] is not None else 0)
+            daily_forecasts[date]['wind_speeds'].append(wind_speeds[i] if i < len(wind_speeds) and wind_speeds[i] is not None else 0)
+            daily_forecasts[date]['soil_temps'].append(soil_temps[i] if i < len(soil_temps) and soil_temps[i] is not None else 0)
+            daily_forecasts[date]['soil_moistures'].append(soil_moistures[i] if i < len(soil_moistures) and soil_moistures[i] is not None else 0)
+
+        # Calculate daily agricultural summaries
+        daily_summaries = {}
+        for date, data in daily_forecasts.items():
+            temps = data['temps']
+            humidities = data['humidities']
+            precipitations = data['precipitations']
+            wind_speeds = data['wind_speeds']
+            soil_temps = data['soil_temps']
+            soil_moistures = data['soil_moistures']
+
+            daily_summaries[date] = {
+                'date': date,
+                'avg_temp': sum(temps) / len(temps) if temps else 0,
+                'min_temp': min(temps) if temps else 0,
+                'max_temp': max(temps) if temps else 0,
+                'avg_humidity': sum(humidities) / len(humidities) if humidities else 0,
+                'total_precipitation': sum(precipitations) if precipitations else 0,
+                'avg_wind_speed': sum(wind_speeds) / len(wind_speeds) if wind_speeds else 0,
+                'avg_soil_temp': sum(soil_temps) / len(soil_temps) if soil_temps else 0,
+                'avg_soil_moisture': sum(soil_moistures) / len(soil_moistures) if soil_moistures else 0,
+                'agricultural_risk': assess_daily_agricultural_risk(temps, humidities, precipitations)
+            }
+
         processed['daily_summaries'] = daily_summaries
         return processed
     except Exception as e:
@@ -263,161 +350,45 @@ def generate_early_warnings(insights):
 
     return warnings
 
-def get_historical_weather(lat, lon, years=10):
-    """Get historical weather data using GEE ERA5 dataset with parallel processing."""
+def get_historical_weather(lat, lon, start_date=None, end_date=None, api_key=None):
+    """Get historical weather data using Open-Meteo Archive API."""
     try:
-        # Check if GEE is initialized
-        try:
-            test_geometry = ee.Geometry.Point([0, 0])
-            gee_initialized = True
-        except:
-            gee_initialized = False
+        # Handle backward compatibility - if start_date/end_date not provided, use years=1
+        if start_date is None or end_date is None:
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=365)
 
-        if not gee_initialized:
-            # Return mock historical data
-            dates = []
-            temperatures = []
-            rainfall = []
-            for year in range(2023 - years + 1, 2024):
-                for month in range(1, 13):
-                    dates.append(f"{year}-{month:02d}-15")
-                    temperatures.append(20 + 10 * np.sin(month * np.pi / 6) + np.random.normal(0, 5))
-                    rainfall.append(max(0, 50 + 30 * np.sin(month * np.pi / 6) + np.random.normal(0, 20)))
-            return {
-                'dates': dates,
-                'temperature': temperatures,
-                'rainfall': rainfall,
-                'note': 'Mock data - GEE not initialized'
-            }
+        # Open-Meteo Archive API - weather data provided by Open-Meteo (https://open-meteo.com/), licensed under CC BY 4.0
+        url = (
+            f"https://archive-api.open-meteo.com/v1/archive?"
+            f"latitude={lat}&longitude={lon}&"
+            f"start_date={start_date.strftime('%Y-%m-%d')}&"
+            f"end_date={end_date.strftime('%Y-%m-%d')}&"
+            f"hourly=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,soil_temperature_0_to_7cm,soil_moisture_0_to_7cm&"
+            f"timezone=Africa/Nairobi"
+        )
 
-        # Define point
-        point = ee.Geometry.Point([lon, lat])
+        # Retry logic for transient failures
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, timeout=30)
+                response.raise_for_status()
+                data = response.json()
+                break
+            except requests.RequestException as e:
+                if attempt == max_retries - 1:
+                    # Return mock data on error
+                    return _generate_mock_historical_data(start_date, end_date)
+                import time
+                time.sleep(1 * (attempt + 1))  # Exponential backoff
 
-        # Calculate date range
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=365 * years)
-
-        # Get ERA5 daily data
-        era5 = ee.ImageCollection('ECMWF/ERA5/DAILY') \
-            .filterDate(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')) \
-            .select(['mean_2m_air_temperature', 'total_precipitation'])
-
-        # Create list of year-month combinations
-        year_months = []
-        current = start_date
-        while current <= end_date:
-            year_months.append(f"{current.year}-{current.month:02d}")
-            if current.month == 12:
-                current = current.replace(year=current.year + 1, month=1)
-            else:
-                current = current.replace(month=current.month + 1)
-
-        # Define function to extract monthly data (to be mapped over)
-        def get_monthly_weather(year_month_str):
-            def inner_calc(ym_str):
-                ym_list = ee.String(ym_str).split('-')
-                year = ee.Number.parse(ym_list.get(0))
-                month = ee.Number.parse(ym_list.get(1))
-
-                start = ee.Date.fromYMD(year, month, 1)
-                end = ee.Date.fromYMD(
-                    ee.Algorithms.If(month.eq(12), year.add(1), year),
-                    ee.Algorithms.If(month.eq(12), 1, month.add(1)),
-                    1
-                )
-
-                monthly_data = era5.filterDate(start, end)
-                monthly_size = monthly_data.size()
-
-                # Calculate monthly aggregates
-                def compute_weather():
-                    temp_mean = monthly_data.select('mean_2m_air_temperature').mean()
-                    precip_sum = monthly_data.select('total_precipitation').sum()
-
-                    # Extract values
-                    temp_val = temp_mean.reduceRegion(
-                        reducer=ee.Reducer.mean(),
-                        geometry=point,
-                        scale=27830
-                    ).get('mean_2m_air_temperature')
-
-                    precip_val = precip_sum.reduceRegion(
-                        reducer=ee.Reducer.mean(),
-                        geometry=point,
-                        scale=27830
-                    ).get('total_precipitation')
-
-                    return ee.Dictionary({
-                        'temperature': temp_val,
-                        'rainfall': precip_val
-                    })
-
-                # Return null dict if no data, otherwise compute
-                return ee.Algorithms.If(monthly_size.gt(0), compute_weather(), ee.Dictionary())
-
-            return inner_calc(year_month_str)
-
-        # Create ee.List and map function in parallel
-        ym_list = ee.List(year_months)
-        weather_results = ym_list.map(lambda ym: get_monthly_weather(ym))
-
-        # Get results
-        try:
-            results_list = weather_results.getInfo()
-        except Exception as get_info_error:
-            print(f"Error getting GEE results: {get_info_error}")
-            # Return mock data on error
-            dates = []
-            temperatures = []
-            rainfall = []
-            for year in range(2023 - years + 1, 2024):
-                for month in range(1, 13):
-                    dates.append(f"{year}-{month:02d}-15")
-                    temperatures.append(20 + 10 * np.sin(month * np.pi / 6) + np.random.normal(0, 5))
-                    rainfall.append(max(0, 50 + 30 * np.sin(month * np.pi / 6) + np.random.normal(0, 20)))
-            return {
-                'dates': dates,
-                'temperature': temperatures,
-                'rainfall': rainfall,
-                'error': f'GEE getInfo error: {str(get_info_error)}',
-                'note': 'Mock data due to GEE error'
-            }
-
-        # Process results
-        dates = []
-        temperatures = []
-        rainfall = []
-
-        for i, ym in enumerate(year_months):
-            data = results_list[i]
-            if data and 'temperature' in data and data['temperature'] is not None:
-                dates.append(f"{ym}-15")
-                temperatures.append(data['temperature'] - 273.15)  # Convert Kelvin to Celsius
-                rainfall.append((data['rainfall'] or 0) * 1000)  # Convert to mm
-
-        return {
-            'dates': dates,
-            'temperature': temperatures,
-            'rainfall': rainfall
-        }
+        # Process Open-Meteo data into expected format (monthly aggregates)
+        return _process_openmeteo_historical_data(data, start_date, end_date)
 
     except Exception as e:
         # Return mock data on error
-        dates = []
-        temperatures = []
-        rainfall = []
-        for year in range(2023 - years + 1, 2024):
-            for month in range(1, 13):
-                dates.append(f"{year}-{month:02d}-15")
-                temperatures.append(20 + 10 * np.sin(month * np.pi / 6) + np.random.normal(0, 5))
-                rainfall.append(max(0, 50 + 30 * np.sin(month * np.pi / 6) + np.random.normal(0, 20)))
-        return {
-            'dates': dates,
-            'temperature': temperatures,
-            'rainfall': rainfall,
-            'error': str(e),
-            'note': 'Mock data due to error'
-        }
+        return _generate_mock_historical_data(start_date or (datetime.now() - timedelta(days=365)), end_date or datetime.now(), error=str(e))
 
 def calculate_temperature_anomaly(historical_temps, baseline_years=30):
     """Calculate temperature anomalies compared to baseline period."""
@@ -467,6 +438,75 @@ def calculate_average_monthly_rainfall(historical_rainfall):
 
     except Exception as e:
         return {'error': str(e)}
+
+def _generate_mock_historical_data(start_date, end_date, error=None):
+    """Generate mock historical weather data for fallback."""
+    dates = []
+    temperatures = []
+    rainfall = []
+
+    current = start_date
+    while current <= end_date:
+        dates.append(current.strftime('%Y-%m-%d'))
+        temperatures.append(20 + 10 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 5))
+        rainfall.append(max(0, 50 + 30 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 20)))
+        current += timedelta(days=30)  # Monthly data
+
+    result = {
+        'dates': dates,
+        'temperature': temperatures,
+        'rainfall': rainfall,
+        'note': 'Mock data - Open-Meteo API unavailable'
+    }
+    if error:
+        result['error'] = error
+    return result
+
+def _process_openmeteo_historical_data(data, start_date, end_date):
+    """Process Open-Meteo historical data into monthly aggregates."""
+    try:
+        # Extract hourly data
+        times = data.get('hourly', {}).get('time', [])
+        temperatures = data.get('hourly', {}).get('temperature_2m', [])
+        precipitations = data.get('hourly', {}).get('precipitation', [])
+
+        if not times:
+            return _generate_mock_historical_data(start_date, end_date, 'No hourly data available')
+
+        # Group by month
+        monthly_data = {}
+        for i, time_str in enumerate(times):
+            date = datetime.fromisoformat(time_str.replace('T', ' ').split('+')[0])
+            month_key = f"{date.year}-{date.month:02d}"
+
+            if month_key not in monthly_data:
+                monthly_data[month_key] = {'temps': [], 'precip': []}
+
+            if i < len(temperatures):
+                monthly_data[month_key]['temps'].append(temperatures[i])
+            if i < len(precipitations):
+                monthly_data[month_key]['precip'].append(precipitations[i])
+
+        # Calculate monthly aggregates
+        dates = []
+        temperatures_agg = []
+        rainfall_agg = []
+
+        for month_key in sorted(monthly_data.keys()):
+            data_month = monthly_data[month_key]
+            if data_month['temps']:
+                dates.append(f"{month_key}-15")  # Mid-month date
+                temperatures_agg.append(sum(data_month['temps']) / len(data_month['temps']))
+                rainfall_agg.append(sum(data_month['precip']))  # Total precipitation for the month
+
+        return {
+            'dates': dates,
+            'temperature': temperatures_agg,
+            'rainfall': rainfall_agg
+        }
+
+    except Exception as e:
+        return _generate_mock_historical_data(start_date, end_date, str(e))
 
 def get_weather_description(weather_data):
     """Generate a descriptive weather summary."""

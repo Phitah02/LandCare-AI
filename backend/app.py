@@ -12,6 +12,7 @@ import requests
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import time
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 CORS(app, origins=[
@@ -475,7 +476,9 @@ def historical_weather(lat, lon):
             })
 
         # Compute new data - get historical data and filter to last N days
-        historical_data = get_historical_weather(lat, lon, years=1)  # Get 1 year to ensure we have enough data
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=365)
+        historical_data = get_historical_weather(lat, lon, start_date, end_date)  # Get 1 year of historical data
 
         if 'error' not in historical_data and 'data' in historical_data:
             # Filter to the most recent N days
@@ -699,7 +702,9 @@ def _forecast_weather_with_token(lat, lon):
             return jsonify({'error': 'Maximum 5 days allowed'}), 400
 
         # Get historical weather data for forecasting (use 1 year for better forecasting)
-        historical_data = get_historical_weather(lat, lon, years=1)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=365)
+        historical_data = get_historical_weather(lat, lon, start_date, end_date)
 
         if 'error' in historical_data:
             return jsonify({'error': f"Failed to get historical weather data: {historical_data['error']}"}), 500
@@ -767,7 +772,9 @@ async def run_weather_forecast_async(task_id, lat, lon, months, user_id):
         background_tasks[task_id] = {'status': 'processing', 'start_time': time.time()}
 
         # First get historical weather data for forecasting
-        historical_data = get_historical_weather(lat, lon, years=1)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=365)
+        historical_data = get_historical_weather(lat, lon, start_date, end_date)
 
         if 'error' in historical_data:
             background_tasks[task_id] = {

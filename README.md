@@ -5,7 +5,7 @@
 
 ## Overview
 
-LandCare AI is a comprehensive multi-section web application for land analysis, featuring a modern, user-friendly interface with dedicated sections for introduction, features, interactive exploration, future predictions, and calls to action. Users must authenticate to access analysis features. The platform provides detailed insights including multiple vegetation indices (NDVI, EVI, SAVI), land cover classification, slope analysis, comprehensive risk assessment, historical trends analysis, and weather forecasting using Google Earth Engine (GEE), OpenWeatherMap APIs, and advanced ARIMA modeling for predictions. A sophisticated caching system ensures optimal performance for repeated analyses.
+LandCare AI is a comprehensive multi-section web application for land analysis, featuring a modern, user-friendly interface with dedicated sections for introduction, features, interactive exploration, future predictions, and calls to action. Users must authenticate to access analysis features. The platform provides detailed insights including multiple vegetation indices (NDVI, EVI, SAVI), land cover classification, slope analysis, comprehensive risk assessment, historical trends analysis, and weather forecasting using Google Earth Engine (GEE), Open-Meteo APIs, and advanced ARIMA modeling for predictions. A sophisticated caching system ensures optimal performance for repeated analyses.
 
 ### Key Features
 - **User Authentication**: Secure login/signup system required for accessing analysis features.
@@ -48,7 +48,7 @@ LandCare AI is a comprehensive multi-section web application for land analysis, 
 - **Analysis**: Backend processes GeoJSON polygons via Flask API with comprehensive data processing and caching.
 - **Integrations**:
   - Google Earth Engine for NDVI, EVI, SAVI, land cover, slope, and historical satellite data.
-  - OpenWeatherMap for current weather, historical weather, and forecasting.
+  - Open-Meteo for current weather, historical weather, and forecasting (free API with CC BY 4.0 license).
   - ERA5 dataset (via GEE) for long-term climate data.
   - Supabase for data storage, user management, and caching.
 - **Machine Learning**: ARIMA time series forecasting for vegetation and weather predictions.
@@ -61,7 +61,7 @@ graph TD
     A[User] --> B[Frontend<br/>Leaflet.js]
     B --> C[Backend<br/>Flask API]
     C --> D[Google Earth Engine]
-    C --> E[OpenWeatherMap]
+    C --> E[Open-Meteo]
     C --> F[Supabase Database]
     D --> G[Satellite & Vegetation Data]
     E --> H[Weather Data]
@@ -132,7 +132,6 @@ Row Level Security (RLS) is enabled on all tables except users, with policies en
 - Python 3.8+
 - Node.js (optional, not used in this setup)
 - Google Earth Engine account (service account recommended for server-side)
-- OpenWeatherMap API key
 - Supabase account (for database functionality)
 
 ### 2. Environment Setup
@@ -170,9 +169,7 @@ Row Level Security (RLS) is enabled on all tables except users, with policies en
      - Set `GEE_SERVICE_ACCOUNT` to the email (e.g., `service@project.iam.gserviceaccount.com`).
      - Set `GEE_PRIVATE_KEY` to the full private key content (multiline string from the JSON).
      - Authenticate: Run `earthengine authenticate --service-account` in the terminal (follow prompts).
-   - **OpenWeatherMap**:
-     - Sign up at [openweathermap.org/api](https://openweathermap.org/api) and get an API key.
-     - Set `OPENWEATHER_API_KEY=your_key_here`.
+   - **Weather Data**: No API key required - uses free Open-Meteo service (weather data provided by Open-Meteo, licensed under CC BY 4.0).
    - **Supabase**:
      - Create a project at [supabase.com](https://supabase.com).
      - Go to Settings > API to get your project URL and anon key.
@@ -249,7 +246,7 @@ Row Level Security (RLS) is enabled on all tables except users, with policies en
   -d '{"geometry": {"type": "Polygon", "coordinates": [[[0,0],[0,1],[1,1],[1,0],[0,0]]]}}'
   ```
 - **GEE**: Ensure authentication works; check console for errors.
-- **Weather**: Test `/weather/<lat>/<lon>` and forecast endpoints.
+- **Weather**: Test `/weather/<lat>/<lon>` and forecast endpoints (now using Open-Meteo free API).
 - **Historical Data**: Test historical NDVI, EVI, SAVI, and weather endpoints.
 - **Forecasting**: Test NDVI and weather forecasting with cached model performance.
 - **Database**: Run included test files (`test_auth.py`, `test_db.py`, etc.) to verify database operations.
