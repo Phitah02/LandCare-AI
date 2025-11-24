@@ -5,15 +5,36 @@ import ee
 import numpy as np
 
 def get_weather_data(lat, lon):
-    """Get comprehensive weather data from OpenWeatherMap API."""
+    """Get comprehensive weather data from Open-Meteo API."""
     try:
-        url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={Config.OPENWEATHER_API_KEY}&units=metric"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        
+        # Open-Meteo current weather API - weather data provided by Open-Meteo (https://open-meteo.com/), licensed under CC BY 4.0
+        url = (
+            f"https://api.open-meteo.com/v1/forecast?"
+            f"latitude={lat}&longitude={lon}&"
+            f"current_weather=true&"
+            f"hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,pressure_msl&"
+            f"timezone=Africa/Nairobi"
+        )
+
+        # Retry logic for transient failures
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                break
+            except requests.RequestException as e:
+                if attempt == max_retries - 1:
+                    raise e
+                import time
+                time.sleep(1 * (attempt + 1))  # Exponential backoff
+
+        # Convert Open-Meteo format to OpenWeatherMap-compatible format for existing code
+        openweather_compatible_data = _convert_openmeteo_to_openweather_format(data)
+
         # Enhance weather data with agricultural insights
-        enhanced_data = enhance_weather_data(data)
+        enhanced_data = enhance_weather_data(openweather_compatible_data)
         return enhanced_data
     except Exception as e:
         return {'error': str(e)}
@@ -438,6 +459,98 @@ def calculate_average_monthly_rainfall(historical_rainfall):
 
     except Exception as e:
         return {'error': str(e)}
+
+def _convert_openmeteo_to_openweather_format(data):
+    """Convert Open-Meteo response to OpenWeatherMap-compatible format."""
+    try:
+        current_weather = data.get('current_weather', {})
+        hourly_data = data.get('hourly', {})
+
+        # Get current values from hourly data (first entry should be current)
+        temp = current_weather.get('temperature', 20)
+        wind_speed = current_weather.get('windspeed', 5)
+        wind_direction = current_weather.get('winddirection', 0)
+        weathercode = current_weather.get('weathercode', 0)
+
+        # Get additional data from hourly arrays
+        humidity = hourly_data.get('relative_humidity_2m', [60])[0] if hourly_data.get('relative_humidity_2m') else 60
+        pressure = hourly_data.get('pressure_msl', [1013])[0] if hourly_data.get('pressure_msl') else 1013
+
+        # Convert weathercode to OpenWeatherMap weather description
+        weather_description = _convert_weathercode_to_description(weathercode)
+
+        # Create OpenWeatherMap-compatible structure
+        openweather_format = {
+            'coord': {'lon': data.get('longitude', 0), 'lat': data.get('latitude', 0)},
+            'weather': [{
+                'id': weathercode,
+                'main': weather_description['main'],
+                'description': weather_description['description'],
+                'icon': '01d'  # Default icon
+            }],
+            'main': {
+                'temp': temp,
+                'humidity': humidity,
+                'pressure': pressure,
+                'temp_min': temp - 5,  # Estimate
+                'temp_max': temp + 5   # Estimate
+            },
+            'wind': {
+                'speed': wind_speed,
+                'deg': wind_direction
+            },
+            'clouds': {'all': 0},  # Not available in Open-Meteo current weather
+            'dt': int(datetime.fromisoformat(current_weather.get('time', datetime.now().isoformat())).timestamp()),
+            'sys': {'country': 'KE', 'sunrise': 0, 'sunset': 0},  # Mock values
+            'name': 'Current Location'
+        }
+
+        return openweather_format
+
+    except Exception as e:
+        # Return a basic structure on error
+        return {
+            'main': {'temp': 20, 'humidity': 60, 'pressure': 1013},
+            'wind': {'speed': 5},
+            'weather': [{'main': 'Clear', 'description': 'clear sky'}],
+            'error': f'Conversion error: {str(e)}'
+        }
+
+def _convert_weathercode_to_description(weathercode):
+    """Convert Open-Meteo weathercode to OpenWeatherMap weather description."""
+    # Open-Meteo weather codes: https://open-meteo.com/en/docs
+    weather_map = {
+        0: {'main': 'Clear', 'description': 'clear sky'},
+        1: {'main': 'Clouds', 'description': 'mainly clear'},
+        2: {'main': 'Clouds', 'description': 'partly cloudy'},
+        3: {'main': 'Clouds', 'description': 'overcast'},
+        45: {'main': 'Fog', 'description': 'fog'},
+        48: {'main': 'Fog', 'description': 'depositing rime fog'},
+        51: {'main': 'Drizzle', 'description': 'light drizzle'},
+        53: {'main': 'Drizzle', 'description': 'moderate drizzle'},
+        55: {'main': 'Drizzle', 'description': 'dense drizzle'},
+        56: {'main': 'Drizzle', 'description': 'light freezing drizzle'},
+        57: {'main': 'Drizzle', 'description': 'dense freezing drizzle'},
+        61: {'main': 'Rain', 'description': 'slight rain'},
+        63: {'main': 'Rain', 'description': 'moderate rain'},
+        65: {'main': 'Rain', 'description': 'heavy rain'},
+        66: {'main': 'Rain', 'description': 'light freezing rain'},
+        67: {'main': 'Rain', 'description': 'heavy freezing rain'},
+        71: {'main': 'Snow', 'description': 'slight snow fall'},
+        73: {'main': 'Snow', 'description': 'moderate snow fall'},
+        75: {'main': 'Snow', 'description': 'heavy snow fall'},
+        77: {'main': 'Snow', 'description': 'snow grains'},
+        80: {'main': 'Rain', 'description': 'slight rain showers'},
+        81: {'main': 'Rain', 'description': 'moderate rain showers'},
+        82: {'main': 'Rain', 'description': 'violent rain showers'},
+        85: {'main': 'Snow', 'description': 'slight snow showers'},
+        86: {'main': 'Snow', 'description': 'heavy snow showers'},
+        95: {'main': 'Thunderstorm', 'description': 'thunderstorm'},
+        96: {'main': 'Thunderstorm', 'description': 'thunderstorm with slight hail'},
+        99: {'main': 'Thunderstorm', 'description': 'thunderstorm with heavy hail'}
+    }
+
+    return weather_map.get(weathercode, {'main': 'Clear', 'description': 'clear sky'})
 
 def _generate_mock_historical_data(start_date, end_date, error=None):
     """Generate mock historical weather data for fallback."""

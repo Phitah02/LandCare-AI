@@ -468,7 +468,7 @@ def historical_weather(lat, lon):
                 'cached': True,
                 'cache_timestamp': cached_data['created_at'],
                 'metadata': {
-                    'source': 'OpenWeatherMap API',
+                    'source': 'Open-Meteo API',
                     'timestamp': cached_data['created_at'],
                     'location': {'lat': lat, 'lon': lon},
                     'period_days': days
@@ -532,7 +532,7 @@ def historical_weather(lat, lon):
             historical_data = {
                 'data': daily_data,
                 'metadata': {
-                    'source': 'OpenWeatherMap API',
+                    'source': 'Open-Meteo API',
                     'timestamp': pd.Timestamp.now().isoformat(),
                     'location': {'lat': lat, 'lon': lon},
                     'period_days': days,
@@ -750,7 +750,7 @@ def _forecast_weather_with_token(lat, lon):
                 'run_date': pd.Timestamp.now().isoformat(),
                 'forecast_period_days': days,
                 'location': {'lat': lat, 'lon': lon},
-                'source': 'OpenWeatherMap historical data',
+                'source': 'Open-Meteo historical data',
                 'uncertainty_method': 'Simple bounds based on historical variance'
             }
         }
