@@ -23,7 +23,7 @@ CORS(app, origins=[
     "http://127.0.0.1:8000",
     "https://landcare-ai-frontend.onrender.com",
     "https://land-care-ai-dl98.vercel.app"
-], supports_credentials=True)
+], methods=['GET', 'POST', 'OPTIONS'], supports_credentials=True)
 app.config.from_object(Config)
 
 # Initialize GEE on startup
@@ -441,14 +441,15 @@ def historical_savi():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['OPTIONS'])
-def historical_weather_options(lat, lon):
-    """Handle CORS preflight requests for historical weather endpoint."""
-    return '', 200
+@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['OPTIONS', 'GET'])
+def historical_weather_endpoint(lat, lon):
+    """Handle historical weather requests with CORS preflight."""
+    if request.method == 'OPTIONS':
+        return '', 200
+    return _historical_weather_with_token(lat, lon)
 
-@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['GET'])
 @token_required
-def historical_weather(lat, lon):
+def _historical_weather_with_token(lat, lon):
     """Get historical weather data for coordinates with caching."""
     try:
         # Check if using date range or days
