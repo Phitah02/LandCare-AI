@@ -261,11 +261,10 @@
                                         <button id="historical-ndvi" class="btn btn-secondary">Load Historical VIs</button>
                                     </div>
                                     <div class="control-group">
-                                        <label for="historical-days-select">Weather Period (days):</label>
-                                        <select id="historical-days-select">
-                                            <option value="3">3 days</option>
-                                            <option value="5" selected>5 days</option>
-                                        </select>
+                                        <label for="historical-weather-start">Weather Start Date:</label>
+                                        <input type="date" id="historical-weather-start" value="2024-01-01">
+                                        <label for="historical-weather-end">End Date:</label>
+                                        <input type="date" id="historical-weather-end" value="2024-01-31">
                                         <button id="historical-weather" class="btn btn-secondary">Load Historical Weather</button>
                                     </div>
                                 </div>
@@ -311,6 +310,10 @@
                                         <select id="forecast-days-select">
                                             <option value="3">3 days</option>
                                             <option value="5" selected>5 days</option>
+                                            <option value="7">7 days</option>
+                                            <option value="10">10 days</option>
+                                            <option value="14">14 days</option>
+                                            <option value="16">16 days</option>
                                         </select>
                                         <button id="forecast-weather" class="btn btn-secondary">Forecast Weather</button>
                                     </div>

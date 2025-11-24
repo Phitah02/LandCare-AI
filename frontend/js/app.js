@@ -1946,9 +1946,19 @@ class LandCareApp {
 
         try {
             const centroid = this.mapHandler.getPolygonCentroid(this.mapHandler.currentPolygonLayer.toGeoJSON().geometry);
-            const days = parseInt(document.getElementById('historical-days-select')?.value) || 5; // Get from UI or default to 5
+            const startDate = document.getElementById('historical-weather-start')?.value;
+            const endDate = document.getElementById('historical-weather-end')?.value;
 
-            const response = await fetch(`https://landcare-ai-1.onrender.com/historical/weather/${centroid[0]}/${centroid[1]}?days=${days}`, {
+            if (!startDate || !endDate) {
+                this.showError('Please select both start and end dates');
+                return;
+            }
+
+            // Convert to ISO format with time
+            const startDateTime = new Date(startDate).toISOString();
+            const endDateTime = new Date(endDate).toISOString();
+
+            const response = await fetch(`https://landcare-ai-1.onrender.com/historical/weather/${centroid[0]}/${centroid[1]}?start_date=${startDateTime}&end_date=${endDateTime}`, {
                 headers: {
                     'Authorization': `Bearer ${this.authToken}`
                 }
@@ -2102,7 +2112,7 @@ class LandCareApp {
         // Update statistics
         if (data.metadata) {
             document.getElementById('historical-data-points').textContent = data.metadata.data_points || (data.data ? data.data.length : 'N/A');
-            document.getElementById('historical-time-range').textContent = `${data.metadata.period_days} days`;
+            document.getElementById('historical-time-range').textContent = data.metadata.period_days ? `${data.metadata.period_days} days` : `${data.metadata.start_date} to ${data.metadata.end_date}`;
             document.getElementById('historical-trend').textContent = data.metadata.precipitation_trend || 'N/A';
         }
 
@@ -2118,8 +2128,8 @@ class LandCareApp {
             const humidities = data.data.map(day => day.humidity);
             const precipitations = data.data.map(day => day.precipitation);
 
-            // Display temperature and precipitation
-            this.renderDualTimeSeriesChart('historical-weather-chart', dates, temperatures, precipitations, 'Temperature (°C)', 'Precipitation (mm)');
+            // Display temperature, humidity, and precipitation
+            this.renderTripleTimeSeriesChart('historical-weather-chart', dates, temperatures, humidities, precipitations, 'Temperature (°C)', 'Humidity (%)', 'Precipitation (mm)');
         } else {
             // Fallback to old format
             this.renderDualTimeSeriesChart('historical-weather-chart', data.dates, data.temperature, data.rainfall, 'Temperature (°C)', 'Rainfall (mm)');
@@ -2339,6 +2349,125 @@ class LandCareApp {
                             color: themeColors.textColor
                         },
                         ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            drawOnChartArea: false,
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    renderTripleTimeSeriesChart(canvasId, dates, tempValues, humidityValues, precipValues, tempLabel, humidityLabel, precipLabel) {
+        if (!this.chartInstances) return;
+
+        // Destroy existing chart if it exists
+        if (this.chartInstances[canvasId]) {
+            this.chartInstances[canvasId].destroy();
+        }
+
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+
+        const themeColors = this.getChartThemeColors();
+
+        this.chartInstances[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [{
+                    label: tempLabel,
+                    data: tempValues,
+                    borderColor: themeColors.red,
+                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.2)'),
+                    yAxisID: 'y',
+                    tension: 0.1
+                }, {
+                    label: humidityLabel,
+                    data: humidityValues,
+                    borderColor: themeColors.green,
+                    backgroundColor: themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.2)'),
+                    yAxisID: 'y1',
+                    tension: 0.1
+                }, {
+                    label: precipLabel,
+                    data: precipValues,
+                    borderColor: themeColors.blue,
+                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.2)'),
+                    yAxisID: 'y2',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                stacked: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Historical Weather Data',
+                        color: themeColors.textColor
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Date',
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            color: themeColors.gridColor
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: tempLabel,
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            color: themeColors.gridColor
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: humidityLabel,
+                            color: themeColors.textColor
+                        },
+                        ticks: {
+                            color: themeColors.textColor
+                        },
+                        grid: {
+                            drawOnChartArea: false,
+                        }
+                    },
+                    y2: {
+                        type: 'linear',
+                        display: false, // Hide precipitation axis to avoid clutter
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: precipLabel,
                             color: themeColors.textColor
                         },
                         grid: {
@@ -2572,8 +2701,8 @@ class LandCareApp {
                 datasets.push({
                     label: 'Temp Upper Bound',
                     data: temperature.upper_bound,
-                    borderColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.3)'),
-                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.1)'),
+                    borderColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.4)'),
+                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.05)'),
                     fill: false,
                     pointRadius: 0,
                     tension: 0.1
@@ -2581,8 +2710,8 @@ class LandCareApp {
                 datasets.push({
                     label: 'Temp Lower Bound',
                     data: temperature.lower_bound,
-                    borderColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.3)'),
-                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.1)'),
+                    borderColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.4)'),
+                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.05)'),
                     fill: '-1', // Fill to previous dataset
                     pointRadius: 0,
                     tension: 0.1
@@ -2606,8 +2735,8 @@ class LandCareApp {
                 datasets.push({
                     label: 'Precip Upper Bound',
                     data: precipitation.upper_bound,
-                    borderColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.3)'),
-                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.1)'),
+                    borderColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.4)'),
+                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.05)'),
                     fill: false,
                     pointRadius: 0,
                     tension: 0.1
@@ -2615,8 +2744,8 @@ class LandCareApp {
                 datasets.push({
                     label: 'Precip Lower Bound',
                     data: precipitation.lower_bound,
-                    borderColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.3)'),
-                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.1)'),
+                    borderColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.4)'),
+                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.05)'),
                     fill: false,
                     pointRadius: 0,
                     tension: 0.1

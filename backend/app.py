@@ -451,15 +451,46 @@ def historical_weather_options(lat, lon):
 def historical_weather(lat, lon):
     """Get historical weather data for coordinates with caching."""
     try:
-        days = int(request.args.get('days', 5))  # Default to 5 days, max 5
+        # Check if using date range or days
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        days = request.args.get('days')
+
         user_id = request.user_id
 
-        if days > 5:
-            return jsonify({'error': 'Maximum 5 days allowed'}), 400
+        if start_date_str and end_date_str:
+            # Use date range
+            try:
+                start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+                end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+            except ValueError:
+                return jsonify({'error': 'Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SSZ)'}), 400
+
+            # Validate date range
+            if end_date <= start_date:
+                return jsonify({'error': 'End date must be after start date'}), 400
+
+            max_days = (end_date - start_date).days
+            if max_days > 365:
+                return jsonify({'error': 'Maximum date range is 365 days'}), 400
+
+        elif days:
+            # Backward compatibility - use days
+            days = int(days)
+            if days > 365:
+                return jsonify({'error': 'Maximum 365 days allowed'}), 400
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days)
+        else:
+            # Default to 30 days
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=30)
 
         # Check cache first
         location_key = f"{lat}_{lon}"
-        cached_data = db.get_cached_historical_data('weather', location_key, lat=lat, lon=lon, years=1)  # Use years instead of days
+        date_range_key = f"{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}"
+        cache_key = f"{location_key}_{date_range_key}"
+        cached_data = db.get_cached_historical_data('weather', cache_key, lat=lat, lon=lon, years=1)
 
         if cached_data:
             # Return cached data
@@ -471,80 +502,50 @@ def historical_weather(lat, lon):
                     'source': 'Open-Meteo API',
                     'timestamp': cached_data['created_at'],
                     'location': {'lat': lat, 'lon': lon},
-                    'period_days': days
+                    'start_date': start_date.isoformat(),
+                    'end_date': end_date.isoformat(),
+                    'period_days': (end_date - start_date).days
                 }
             })
 
-        # Compute new data - get historical data and filter to last N days
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=365)
-        historical_data = get_historical_weather(lat, lon, start_date, end_date)  # Get 1 year of historical data
+        # Compute new data - get historical data for the specified range
+        historical_data = get_historical_weather(lat, lon, start_date, end_date)
 
         if 'error' not in historical_data and 'data' in historical_data:
-            # Filter to the most recent N days
+            # Process the data (already in daily format from get_historical_weather)
             weather_data = historical_data['data']
-            if len(weather_data) > days:
-                weather_data = weather_data[-days:]  # Take the last N days
 
-            # Aggregate hourly data to daily summaries
-            daily_data = []
-            current_date = None
-            daily_temps = []
-            daily_humidity = []
-            daily_precipitation = []
-
+            # Ensure we have the required fields including humidity
+            processed_data = []
             for entry in weather_data:
-                entry_date = pd.to_datetime(entry['dt'], unit='s').date()
-
-                if current_date != entry_date:
-                    # Save previous day's data
-                    if current_date is not None and daily_temps:
-                        daily_data.append({
-                            'date': current_date.isoformat(),
-                            'temperature': round(sum(daily_temps) / len(daily_temps), 1),
-                            'humidity': round(sum(daily_humidity) / len(daily_humidity), 1),
-                            'precipitation': round(sum(daily_precipitation), 1),
-                            'temp_min': round(min(daily_temps), 1),
-                            'temp_max': round(max(daily_temps), 1)
-                        })
-
-                    # Start new day
-                    current_date = entry_date
-                    daily_temps = []
-                    daily_humidity = []
-                    daily_precipitation = []
-
-                daily_temps.append(entry['main']['temp'])
-                daily_humidity.append(entry['main']['humidity'])
-                daily_precipitation.append(entry.get('rain', {}).get('1h', 0) or entry.get('snow', {}).get('1h', 0) or 0)
-
-            # Add the last day
-            if current_date is not None and daily_temps:
-                daily_data.append({
-                    'date': current_date.isoformat(),
-                    'temperature': round(sum(daily_temps) / len(daily_temps), 1),
-                    'humidity': round(sum(daily_humidity) / len(daily_humidity), 1),
-                    'precipitation': round(sum(daily_precipitation), 1),
-                    'temp_min': round(min(daily_temps), 1),
-                    'temp_max': round(max(daily_temps), 1)
-                })
+                processed_entry = {
+                    'date': entry['date'],
+                    'temperature': entry['temperature'],
+                    'humidity': entry.get('humidity', entry.get('relative_humidity', 60)),  # Support both field names
+                    'precipitation': entry['precipitation'],
+                    'temp_min': entry.get('temp_min', entry['temperature'] - 2),
+                    'temp_max': entry.get('temp_max', entry['temperature'] + 2)
+                }
+                processed_data.append(processed_entry)
 
             historical_data = {
-                'data': daily_data,
+                'data': processed_data,
                 'metadata': {
                     'source': 'Open-Meteo API',
                     'timestamp': pd.Timestamp.now().isoformat(),
                     'location': {'lat': lat, 'lon': lon},
-                    'period_days': days,
-                    'data_points': len(daily_data)
+                    'start_date': start_date.isoformat(),
+                    'end_date': end_date.isoformat(),
+                    'period_days': (end_date - start_date).days,
+                    'data_points': len(processed_data)
                 }
             }
 
             # Calculate summary statistics
-            if daily_data:
-                temps = [day['temperature'] for day in daily_data]
-                humidity = [day['humidity'] for day in daily_data]
-                precip = [day['precipitation'] for day in daily_data]
+            if processed_data:
+                temps = [day['temperature'] for day in processed_data]
+                humidity = [day['humidity'] for day in processed_data]
+                precip = [day['precipitation'] for day in processed_data]
 
                 historical_data['statistics'] = {
                     'avg_temperature': round(sum(temps) / len(temps), 1),
@@ -552,7 +553,7 @@ def historical_weather(lat, lon):
                     'total_precipitation': round(sum(precip), 1),
                     'temp_range': f"{round(min(temps), 1)}°C - {round(max(temps), 1)}°C",
                     'humidity_range': f"{round(min(humidity), 1)}% - {round(max(humidity), 1)}%",
-                    'precipitation_trend': 'increasing' if precip[-1] > precip[0] else 'decreasing'
+                    'precipitation_trend': 'increasing' if len(precip) > 1 and precip[-1] > precip[0] else 'decreasing'
                 }
         else:
             historical_data = {
@@ -562,7 +563,7 @@ def historical_weather(lat, lon):
 
         # Save to cache
         try:
-            db.save_cached_historical_data('weather', location_key, historical_data, lat=lat, lon=lon, years=1)  # Use years instead of days
+            db.save_cached_historical_data('weather', cache_key, historical_data, lat=lat, lon=lon, years=1)
         except Exception as cache_error:
             print(f"Cache save error: {cache_error}")
 
@@ -695,11 +696,11 @@ def forecast_weather_endpoint(lat, lon):
 @token_required
 def _forecast_weather_with_token(lat, lon):
     try:
-        days = int(request.args.get('days', 5))  # Default to 5 days, max 5
+        days = int(request.args.get('days', 5))  # Default to 5 days, max 16
         user_id = request.user_id
 
-        if days > 5:
-            return jsonify({'error': 'Maximum 5 days allowed'}), 400
+        if days > 16:
+            return jsonify({'error': 'Maximum 16 days allowed'}), 400
 
         # Get historical weather data for forecasting (use 1 year for better forecasting)
         end_date = datetime.now()
