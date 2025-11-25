@@ -371,14 +371,9 @@ def generate_early_warnings(insights):
 
     return warnings
 
-def get_historical_weather(lat, lon, start_date=None, end_date=None, api_key=None):
-    """Get historical weather data using Open-Meteo Archive API."""
+def _get_historical_weather_single_request(lat, lon, start_date, end_date):
+    """Get historical weather data for a single date range using Open-Meteo Archive API."""
     try:
-        # Handle backward compatibility - if start_date/end_date not provided, use years=1
-        if start_date is None or end_date is None:
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=365)
-
         # Open-Meteo Archive API - weather data provided by Open-Meteo (https://open-meteo.com/), licensed under CC BY 4.0
         url = (
             f"https://archive-api.open-meteo.com/v1/archive?"
@@ -404,8 +399,67 @@ def get_historical_weather(lat, lon, start_date=None, end_date=None, api_key=Non
                 import time
                 time.sleep(1 * (attempt + 1))  # Exponential backoff
 
-        # Process Open-Meteo data into expected format (monthly aggregates)
+        # Process Open-Meteo data into expected format (daily aggregates)
         return _process_openmeteo_historical_data(data, start_date, end_date)
+
+    except Exception as e:
+        # Return mock data on error
+        return _generate_mock_historical_data(start_date, end_date, error=str(e))
+
+def get_historical_weather(lat, lon, start_date=None, end_date=None, api_key=None):
+    """Get historical weather data using Open-Meteo Archive API with chunked requests for long ranges."""
+    try:
+        # Handle backward compatibility - if start_date/end_date not provided, use years=1
+        if start_date is None or end_date is None:
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=365)
+
+        # Calculate date range in days
+        date_range_days = (end_date - start_date).days
+
+        # If range is <= 365 days, use single request
+        if date_range_days <= 365:
+            return _get_historical_weather_single_request(lat, lon, start_date, end_date)
+
+        # For longer ranges, split into yearly chunks
+        all_data = []
+        current_start = start_date
+
+        while current_start < end_date:
+            # Calculate end of current year chunk
+            current_year_end = datetime(current_start.year, 12, 31)
+            chunk_end = min(current_year_end, end_date)
+
+            # Get data for this chunk
+            chunk_data = _get_historical_weather_single_request(lat, lon, current_start, chunk_end)
+            if 'error' not in chunk_data and 'data' in chunk_data:
+                all_data.extend(chunk_data['data'])
+            else:
+                # If chunk fails, return error
+                return {'error': f'Failed to retrieve data for period {current_start.strftime("%Y-%m-%d")} to {chunk_end.strftime("%Y-%m-%d")}: {chunk_data.get("error", "Unknown error")}'}
+
+            # Move to next year
+            current_start = chunk_end + timedelta(days=1)
+
+            # Add delay between requests to handle rate limits (1 second)
+            if current_start < end_date:
+                import time
+                time.sleep(1)
+
+        # Return aggregated data
+        return {
+            'data': all_data,
+            'metadata': {
+                'source': 'Open-Meteo API',
+                'timestamp': datetime.now().isoformat(),
+                'location': {'lat': lat, 'lon': lon},
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat(),
+                'period_days': date_range_days,
+                'data_points': len(all_data),
+                'chunked_request': True
+            }
+        }
 
     except Exception as e:
         # Return mock data on error
@@ -554,21 +608,28 @@ def _convert_weathercode_to_description(weathercode):
 
 def _generate_mock_historical_data(start_date, end_date, error=None):
     """Generate mock historical weather data for fallback."""
-    dates = []
-    temperatures = []
-    rainfall = []
+    daily_entries = []
 
     current = start_date
     while current <= end_date:
-        dates.append(current.strftime('%Y-%m-%d'))
-        temperatures.append(20 + 10 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 5))
-        rainfall.append(max(0, 50 + 30 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 20)))
-        current += timedelta(days=30)  # Monthly data
+        # Generate daily mock data
+        base_temp = 20 + 10 * np.sin(current.month * np.pi / 6)
+        temp = base_temp + np.random.normal(0, 5)
+        precip = max(0, 50 + 30 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 20))
+        humidity = 60 + 20 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 10)
+
+        daily_entries.append({
+            'date': current.strftime('%Y-%m-%d'),
+            'temperature': round(temp, 1),
+            'humidity': round(max(0, min(100, humidity)), 1),
+            'precipitation': round(precip, 1),
+            'temp_min': round(temp - 3, 1),
+            'temp_max': round(temp + 3, 1)
+        })
+        current += timedelta(days=1)  # Daily data
 
     result = {
-        'dates': dates,
-        'temperature': temperatures,
-        'rainfall': rainfall,
+        'data': daily_entries,
         'note': 'Mock data - Open-Meteo API unavailable'
     }
     if error:
@@ -576,46 +637,56 @@ def _generate_mock_historical_data(start_date, end_date, error=None):
     return result
 
 def _process_openmeteo_historical_data(data, start_date, end_date):
-    """Process Open-Meteo historical data into monthly aggregates."""
+    """Process Open-Meteo historical data into daily aggregates."""
     try:
         # Extract hourly data
         times = data.get('hourly', {}).get('time', [])
         temperatures = data.get('hourly', {}).get('temperature_2m', [])
         precipitations = data.get('hourly', {}).get('precipitation', [])
+        humidities = data.get('hourly', {}).get('relative_humidity_2m', [])
 
         if not times:
             return _generate_mock_historical_data(start_date, end_date, 'No hourly data available')
 
-        # Group by month
-        monthly_data = {}
+        # Group by day
+        daily_data = {}
         for i, time_str in enumerate(times):
             date = datetime.fromisoformat(time_str.replace('T', ' ').split('+')[0])
-            month_key = f"{date.year}-{date.month:02d}"
+            day_key = date.strftime('%Y-%m-%d')
 
-            if month_key not in monthly_data:
-                monthly_data[month_key] = {'temps': [], 'precip': []}
+            if day_key not in daily_data:
+                daily_data[day_key] = {'temps': [], 'precip': [], 'humidities': []}
 
-            if i < len(temperatures):
-                monthly_data[month_key]['temps'].append(temperatures[i])
-            if i < len(precipitations):
-                monthly_data[month_key]['precip'].append(precipitations[i])
+            if i < len(temperatures) and temperatures[i] is not None:
+                daily_data[day_key]['temps'].append(temperatures[i])
+            if i < len(precipitations) and precipitations[i] is not None:
+                daily_data[day_key]['precip'].append(precipitations[i])
+            if i < len(humidities) and humidities[i] is not None:
+                daily_data[day_key]['humidities'].append(humidities[i])
 
-        # Calculate monthly aggregates
-        dates = []
-        temperatures_agg = []
-        rainfall_agg = []
+        # Calculate daily aggregates
+        daily_entries = []
+        for day_key in sorted(daily_data.keys()):
+            data_day = daily_data[day_key]
 
-        for month_key in sorted(monthly_data.keys()):
-            data_month = monthly_data[month_key]
-            if data_month['temps']:
-                dates.append(f"{month_key}-15")  # Mid-month date
-                temperatures_agg.append(sum(data_month['temps']) / len(data_month['temps']))
-                rainfall_agg.append(sum(data_month['precip']))  # Total precipitation for the month
+            if data_day['temps']:
+                avg_temp = sum(data_day['temps']) / len(data_day['temps'])
+                total_precip = sum(data_day['precip']) if data_day['precip'] else 0
+                avg_humidity = sum(data_day['humidities']) / len(data_day['humidities']) if data_day['humidities'] else 60
+                min_temp = min(data_day['temps'])
+                max_temp = max(data_day['temps'])
+
+                daily_entries.append({
+                    'date': day_key,
+                    'temperature': round(avg_temp, 1),
+                    'humidity': round(avg_humidity, 1),
+                    'precipitation': round(total_precip, 1),
+                    'temp_min': round(min_temp, 1),
+                    'temp_max': round(max_temp, 1)
+                })
 
         return {
-            'dates': dates,
-            'temperature': temperatures_agg,
-            'rainfall': rainfall_agg
+            'data': daily_entries
         }
 
     except Exception as e:

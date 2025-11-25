@@ -472,14 +472,14 @@ def _historical_weather_with_token(lat, lon):
                 return jsonify({'error': 'End date must be after start date'}), 400
 
             max_days = (end_date - start_date).days
-            if max_days > 365:
-                return jsonify({'error': 'Maximum date range is 365 days'}), 400
+            if max_days > 3650:
+                return jsonify({'error': 'Maximum date range is 3650 days (10 years)'}), 400
 
         elif days:
             # Backward compatibility - use days
             days = int(days)
-            if days > 365:
-                return jsonify({'error': 'Maximum 365 days allowed'}), 400
+            if days > 3650:
+                return jsonify({'error': 'Maximum 3650 days allowed'}), 400
             end_date = datetime.now()
             start_date = end_date - timedelta(days=days)
         else:
