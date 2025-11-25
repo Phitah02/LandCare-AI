@@ -457,7 +457,7 @@ def historical_savi():
 
 
 
-@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['GET'])
+@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['GET', 'OPTIONS'])
 @token_required
 def historical_weather(lat, lon):
     """Get historical weather data for coordinates with caching."""
@@ -691,7 +691,7 @@ async def run_ndvi_forecast_async(task_id, geometry, months, user_id):
 
 
 
-@app.route('/forecast/weather/<float:lat>/<float:lon>', methods=['GET'])
+@app.route('/forecast/weather/<float:lat>/<float:lon>', methods=['GET', 'OPTIONS'])
 @token_required
 def forecast_weather_route(lat, lon):
     try:
