@@ -703,57 +703,56 @@ def _forecast_weather_with_token(lat, lon):
         if days > 16:
             return jsonify({'error': 'Maximum 16 days allowed'}), 400
 
-        # Get historical weather data for forecasting (use 1 year for better forecasting)
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=365)
-        historical_data = get_historical_weather(lat, lon, start_date, end_date)
+        # Use Open-Meteo's built-in forecast API instead of custom ML forecasting
+        forecast_data_raw = get_weather_forecast(lat, lon)
 
-        if 'error' in historical_data:
-            return jsonify({'error': f"Failed to get historical weather data: {historical_data['error']}"}), 500
+        if 'error' in forecast_data_raw:
+            return jsonify({'error': f"Failed to get weather forecast: {forecast_data_raw['error']}"}), 500
 
-        # Generate location key for caching
-        location_key = f"{lat}_{lon}"
+        # Extract daily summaries from Open-Meteo forecast
+        daily_summaries = forecast_data_raw.get('daily_summaries', {})
 
-        # Forecast temperature with uncertainty
-        temp_forecast = forecast_weather(historical_data, 'temperature', days, location_key, use_sarima=True)
-        if 'error' in temp_forecast:
-            return jsonify({'error': f"Failed to forecast temperature: {temp_forecast['error']}"}), 500
+        if not daily_summaries:
+            return jsonify({'error': 'No forecast data available'}), 500
 
-        # Forecast precipitation (rainfall) with uncertainty
-        precip_forecast = forecast_weather(historical_data, 'rainfall', days, location_key, use_sarima=True)
-        if 'error' in precip_forecast:
-            return jsonify({'error': f"Failed to forecast precipitation: {precip_forecast['error']}"}), 500
+        # Sort dates and extract data for the requested number of days
+        sorted_dates = sorted(daily_summaries.keys())[:days]
 
-        # Forecast humidity with uncertainty - use temperature as proxy since humidity data may not be available
-        humidity_forecast = forecast_weather(historical_data, 'temperature', days, location_key + '_humidity', use_sarima=True)
-        if 'error' in humidity_forecast:
-            return jsonify({'error': f"Failed to forecast humidity: {humidity_forecast['error']}"}), 500
+        temperatures = []
+        precipitations = []
+        humidities = []
 
-        # Combine forecasts into the format expected by frontend with uncertainty bands
+        for date in sorted_dates:
+            day_data = daily_summaries[date]
+            temperatures.append(day_data['avg_temp'])
+            precipitations.append(day_data['total_precipitation'])
+            humidities.append(day_data['avg_humidity'])
+
+        # Create forecast data in the format expected by frontend with simple uncertainty bounds
         forecast_data = {
-            'forecast_dates': temp_forecast['forecast_dates'],
+            'forecast_dates': sorted_dates,
             'temperature': {
-                'values': temp_forecast['forecast_values'],
-                'upper_bound': [v + 2 for v in temp_forecast['forecast_values']],  # Simple uncertainty
-                'lower_bound': [v - 2 for v in temp_forecast['forecast_values']]
+                'values': temperatures,
+                'upper_bound': [v + 2 for v in temperatures],  # Simple uncertainty bounds
+                'lower_bound': [v - 2 for v in temperatures]
             },
             'precipitation': {
-                'values': [max(0, v) for v in precip_forecast['forecast_values']],
-                'upper_bound': [max(0, v + 1) for v in precip_forecast['forecast_values']],
-                'lower_bound': [max(0, v - 0.5) for v in precip_forecast['forecast_values']]
+                'values': [max(0, v) for v in precipitations],
+                'upper_bound': [max(0, v + 1) for v in precipitations],
+                'lower_bound': [max(0, v - 0.5) for v in precipitations]
             },
             'humidity': {
-                'values': humidity_forecast['forecast_values'],
-                'upper_bound': [min(100, v + 5) for v in humidity_forecast['forecast_values']],
-                'lower_bound': [max(0, v - 5) for v in humidity_forecast['forecast_values']]
+                'values': humidities,
+                'upper_bound': [min(100, v + 5) for v in humidities],
+                'lower_bound': [max(0, v - 5) for v in humidities]
             },
             'metadata': {
-                'model_version': '1.0',
+                'model_version': 'Open-Meteo Built-in',
                 'run_date': pd.Timestamp.now().isoformat(),
                 'forecast_period_days': days,
                 'location': {'lat': lat, 'lon': lon},
-                'source': 'Open-Meteo historical data',
-                'uncertainty_method': 'Simple bounds based on historical variance'
+                'source': 'Open-Meteo Forecast API',
+                'uncertainty_method': 'Simple bounds based on daily variance'
             }
         }
 

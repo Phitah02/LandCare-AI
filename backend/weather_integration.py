@@ -40,12 +40,14 @@ def get_weather_data(lat, lon):
         return {'error': str(e)}
 
 def get_weather_forecast(lat, lon, api_key=None):
-    """Get 5-day weather forecast with agricultural insights using Open-Meteo API."""
+    """Get weather forecast with agricultural insights using Open-Meteo API."""
     try:
         # Open-Meteo forecast API - weather data provided by Open-Meteo (https://open-meteo.com/), licensed under CC BY 4.0
+        # Request up to 16 days of forecast data
         url = (
             f"https://api.open-meteo.com/v1/forecast?"
             f"latitude={lat}&longitude={lon}&"
+            f"forecast_days=16&"
             f"hourly=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,soil_temperature_0_to_7cm,soil_moisture_0_to_7cm&"
             f"timezone=Africa/Nairobi"
         )
