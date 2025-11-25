@@ -272,6 +272,31 @@ class LandCareApp {
         // Historical and Forecasting buttons will be attached after tabs are created
         this.attachHistoricalButtons();
         this.attachForecastingButtons();
+    }
+
+    attachHistoricalButtons() {
+        const historicalBtn = document.getElementById('historical-ndvi');
+        if (historicalBtn) {
+            historicalBtn.addEventListener('click', () => {
+                this.loadHistoricalNDVI();
+            });
+        }
+    }
+
+    attachForecastingButtons() {
+        const forecastBtn = document.getElementById('forecast-ndvi');
+        if (forecastBtn) {
+            forecastBtn.addEventListener('click', () => {
+                this.loadForecastNDVI();
+            });
+        }
+
+        const forecastWeatherBtn = document.getElementById('forecast-weather');
+        if (forecastWeatherBtn) {
+            forecastWeatherBtn.addEventListener('click', () => {
+                this.loadForecastWeather();
+            });
+        }
 
         // Theme toggle button
         const themeToggle = document.getElementById('theme-toggle');
