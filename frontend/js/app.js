@@ -1146,9 +1146,7 @@ class LandCareApp {
     }
 
     updateChartThemes() {
-        // Update existing charts with new theme colors
-        // Note: This is a simplified approach. In a full implementation,
-        // you'd store chart data and re-render with new colors
+        // Update existing Chart.js charts with new theme colors
         if (this.chartInstances) {
             Object.keys(this.chartInstances).forEach(canvasId => {
                 const chart = this.chartInstances[canvasId];
@@ -1178,6 +1176,35 @@ class LandCareApp {
                         });
                     }
                     chart.update();
+                }
+            });
+        }
+
+        // Update D3.js charts with new theme colors
+        if (this.d3Charts) {
+            Object.keys(this.d3Charts).forEach(containerId => {
+                const chartData = this.d3Charts[containerId];
+                if (chartData && chartData.svg) {
+                    const themeColors = this.getChartThemeColors();
+                    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+                    // Update text colors
+                    chartData.svg.selectAll("text")
+                        .style("fill", themeColors.textColor);
+
+                    // Update axis colors
+                    chartData.svg.selectAll(".domain, .tick line")
+                        .style("stroke", themeColors.gridColor);
+
+                    // Update tooltip background
+                    d3.selectAll(".d3-tooltip")
+                        .style("background-color", isDark ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.9)")
+                        .style("border-color", themeColors.gridColor)
+                        .style("color", themeColors.textColor);
+
+                    // Update point stroke colors
+                    chartData.svg.selectAll("circle")
+                        .attr("stroke", isDark ? "#fff" : "#000");
                 }
             });
         }
@@ -2121,19 +2148,8 @@ class LandCareApp {
             console.log('Weather Statistics:', data.statistics);
         }
 
-        // Handle new data format with daily summaries
-        if (data.data && Array.isArray(data.data)) {
-            const dates = data.data.map(day => day.date);
-            const temperatures = data.data.map(day => day.temperature);
-            const humidities = data.data.map(day => day.humidity);
-            const precipitations = data.data.map(day => day.precipitation);
-
-            // Display temperature, humidity, and precipitation
-            this.renderTripleTimeSeriesChart('historical-weather-chart', dates, temperatures, humidities, precipitations, 'Temperature (°C)', 'Humidity (%)', 'Precipitation (mm)');
-        } else {
-            // Fallback to old format
-            this.renderDualTimeSeriesChart('historical-weather-chart', data.dates, data.temperature, data.rainfall, 'Temperature (°C)', 'Rainfall (mm)');
-        }
+        // Use new D3.js chart for both data formats
+        this.renderD3HistoricalWeatherChart('historical-weather-chart', data);
     }
 
     displayNDVIForecast(data) {
@@ -2358,6 +2374,394 @@ class LandCareApp {
                 }
             }
         });
+    }
+
+    renderD3HistoricalWeatherChart(containerId, data) {
+        // Clear any existing chart
+        d3.select(`#${containerId}`).selectAll("*").remove();
+
+        // Get theme colors
+        const themeColors = this.getChartThemeColors();
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+        // Set up margins and dimensions
+        const margin = {top: 20, right: 80, bottom: 60, left: 60};
+        const container = d3.select(`#${containerId}`);
+        const containerRect = container.node().getBoundingClientRect();
+        const width = containerRect.width - margin.left - margin.right;
+        const height = 300 - margin.top - margin.bottom;
+
+        // Create SVG
+        const svg = container.append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Process data based on format
+        let processedData;
+        if (data.data && Array.isArray(data.data)) {
+            // Daily format: data.data array with date, temperature, humidity, precipitation
+            processedData = data.data.map(d => ({
+                date: new Date(d.date),
+                temperature: d.temperature,
+                humidity: d.humidity,
+                precipitation: d.precipitation
+            }));
+        } else {
+            // Monthly format: dates, temperature, rainfall arrays
+            processedData = data.dates.map((date, i) => ({
+                date: new Date(date),
+                temperature: data.temperature[i],
+                humidity: null, // Not available in monthly format
+                precipitation: data.rainfall ? data.rainfall[i] : 0
+            }));
+        }
+
+        // Remove null/undefined values
+        processedData = processedData.filter(d => d.temperature !== null && d.temperature !== undefined);
+
+        // Set up scales
+        const xScale = d3.scaleTime()
+            .domain(d3.extent(processedData, d => d.date))
+            .range([0, width]);
+
+        const yTempScale = d3.scaleLinear()
+            .domain([
+                d3.min(processedData, d => d.temperature) - 5,
+                d3.max(processedData, d => d.temperature) + 5
+            ])
+            .range([height, 0]);
+
+        const yHumidityScale = d3.scaleLinear()
+            .domain([0, 100])
+            .range([height, 0]);
+
+        const yPrecipScale = d3.scaleLinear()
+            .domain([0, d3.max(processedData, d => d.precipitation) * 1.1])
+            .range([height, 0]);
+
+        // Create axes
+        const xAxis = d3.axisBottom(xScale)
+            .ticks(Math.min(processedData.length, 10))
+            .tickFormat(d3.timeFormat("%b %Y"));
+
+        const yTempAxis = d3.axisLeft(yTempScale);
+        const yHumidityAxis = d3.axisRight(yHumidityScale);
+        const yPrecipAxis = d3.axisRight(yPrecipScale);
+
+        // Add X axis
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(xAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        // Add Y axes
+        svg.append("g")
+            .call(yTempAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        // Temperature axis label
+        svg.append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", 0 - margin.left)
+            .attr("x", 0 - (height / 2))
+            .attr("dy", "1em")
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .text("Temperature (°C)");
+
+        // Humidity axis (only if data available)
+        if (processedData.some(d => d.humidity !== null)) {
+            svg.append("g")
+                .attr("transform", `translate(${width},0)`)
+                .call(yHumidityAxis)
+                .selectAll("text")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "12px");
+
+            // Humidity axis label
+            svg.append("text")
+                .attr("transform", "rotate(90)")
+                .attr("y", -width - margin.right)
+                .attr("x", 0 - (height / 2))
+                .attr("dy", "1em")
+                .style("text-anchor", "middle")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "12px")
+                .text("Humidity (%)");
+        }
+
+        // Precipitation axis
+        svg.append("g")
+            .attr("transform", `translate(${width},0)`)
+            .call(yPrecipAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        // Precipitation axis label
+        svg.append("text")
+            .attr("transform", "rotate(90)")
+            .attr("y", -width - margin.right + 40)
+            .attr("x", 0 - (height / 2))
+            .attr("dy", "1em")
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .text("Precipitation (mm)");
+
+        // Create line generators
+        const tempLine = d3.line()
+            .x(d => xScale(d.date))
+            .y(d => yTempScale(d.temperature))
+            .curve(d3.curveMonotoneX);
+
+        const humidityLine = d3.line()
+            .x(d => xScale(d.date))
+            .y(d => yHumidityScale(d.humidity))
+            .curve(d3.curveMonotoneX)
+            .defined(d => d.humidity !== null);
+
+        const precipLine = d3.line()
+            .x(d => xScale(d.date))
+            .y(d => yPrecipScale(d.precipitation))
+            .curve(d3.curveMonotoneX);
+
+        // Add temperature line
+        svg.append("path")
+            .datum(processedData)
+            .attr("fill", "none")
+            .attr("stroke", themeColors.red)
+            .attr("stroke-width", 2)
+            .attr("d", tempLine);
+
+        // Add temperature points
+        svg.selectAll(".temp-point")
+            .data(processedData)
+            .enter().append("circle")
+            .attr("class", "temp-point")
+            .attr("cx", d => xScale(d.date))
+            .attr("cy", d => yTempScale(d.temperature))
+            .attr("r", 3)
+            .attr("fill", themeColors.red)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        // Add humidity line and points (only if data available)
+        if (processedData.some(d => d.humidity !== null)) {
+            svg.append("path")
+                .datum(processedData.filter(d => d.humidity !== null))
+                .attr("fill", "none")
+                .attr("stroke", themeColors.green)
+                .attr("stroke-width", 2)
+                .attr("stroke-dasharray", "5,5")
+                .attr("d", humidityLine);
+
+            svg.selectAll(".humidity-point")
+                .data(processedData.filter(d => d.humidity !== null))
+                .enter().append("circle")
+                .attr("class", "humidity-point")
+                .attr("cx", d => xScale(d.date))
+                .attr("cy", d => yHumidityScale(d.humidity))
+                .attr("r", 3)
+                .attr("fill", themeColors.green)
+                .attr("stroke", isDark ? "#fff" : "#000")
+                .attr("stroke-width", 1);
+        }
+
+        // Add precipitation line and points
+        svg.append("path")
+            .datum(processedData)
+            .attr("fill", "none")
+            .attr("stroke", themeColors.blue)
+            .attr("stroke-width", 2)
+            .attr("d", precipLine);
+
+        svg.selectAll(".precip-point")
+            .data(processedData)
+            .enter().append("circle")
+            .attr("class", "precip-point")
+            .attr("cx", d => xScale(d.date))
+            .attr("cy", d => yPrecipScale(d.precipitation))
+            .attr("r", 3)
+            .attr("fill", themeColors.blue)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        // Add legend
+        const legend = svg.append("g")
+            .attr("transform", `translate(${width - 200}, 10)`);
+
+        // Temperature legend
+        legend.append("line")
+            .attr("x1", 0)
+            .attr("y1", 0)
+            .attr("x2", 20)
+            .attr("y2", 0)
+            .attr("stroke", themeColors.red)
+            .attr("stroke-width", 2);
+
+        legend.append("circle")
+            .attr("cx", 10)
+            .attr("cy", 0)
+            .attr("r", 3)
+            .attr("fill", themeColors.red)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        legend.append("text")
+            .attr("x", 25)
+            .attr("y", 0)
+            .attr("dy", "0.35em")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .text("Temperature");
+
+        // Humidity legend (only if data available)
+        if (processedData.some(d => d.humidity !== null)) {
+            legend.append("line")
+                .attr("x1", 0)
+                .attr("y1", 20)
+                .attr("x2", 20)
+                .attr("y2", 20)
+                .attr("stroke", themeColors.green)
+                .attr("stroke-width", 2)
+                .attr("stroke-dasharray", "5,5");
+
+            legend.append("circle")
+                .attr("cx", 10)
+                .attr("cy", 20)
+                .attr("r", 3)
+                .attr("fill", themeColors.green)
+                .attr("stroke", isDark ? "#fff" : "#000")
+                .attr("stroke-width", 1);
+
+            legend.append("text")
+                .attr("x", 25)
+                .attr("y", 20)
+                .attr("dy", "0.35em")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "12px")
+                .text("Humidity");
+        }
+
+        // Precipitation legend
+        const precipY = processedData.some(d => d.humidity !== null) ? 40 : 20;
+        legend.append("line")
+            .attr("x1", 0)
+            .attr("y1", precipY)
+            .attr("x2", 20)
+            .attr("y2", precipY)
+            .attr("stroke", themeColors.blue)
+            .attr("stroke-width", 2);
+
+        legend.append("circle")
+            .attr("cx", 10)
+            .attr("cy", precipY)
+            .attr("r", 3)
+            .attr("fill", themeColors.blue)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        legend.append("text")
+            .attr("x", 25)
+            .attr("y", precipY)
+            .attr("dy", "0.35em")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .text("Precipitation");
+
+        // Add zoom functionality
+        const zoom = d3.zoom()
+            .scaleExtent([1, 10])
+            .translateExtent([[0, 0], [width, height]])
+            .extent([[0, 0], [width, height]])
+            .on("zoom", (event) => {
+                const newXScale = event.transform.rescaleX(xScale);
+                svg.select(".x-axis").call(xAxis.scale(newXScale));
+
+                // Update lines and points
+                svg.selectAll(".temp-line").attr("d", tempLine.x(d => newXScale(d.date)));
+                svg.selectAll(".temp-point").attr("cx", d => newXScale(d.date));
+
+                if (processedData.some(d => d.humidity !== null)) {
+                    svg.selectAll(".humidity-line").attr("d", humidityLine.x(d => newXScale(d.date)));
+                    svg.selectAll(".humidity-point").attr("cx", d => newXScale(d.date));
+                }
+
+                svg.selectAll(".precip-line").attr("d", precipLine.x(d => newXScale(d.date)));
+                svg.selectAll(".precip-point").attr("cx", d => newXScale(d.date));
+            });
+
+        svg.call(zoom);
+
+        // Add tooltip
+        const tooltip = d3.select("body").append("div")
+            .attr("class", "d3-tooltip")
+            .style("position", "absolute")
+            .style("visibility", "hidden")
+            .style("background-color", isDark ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.9)")
+            .style("border", `1px solid ${themeColors.gridColor}`)
+            .style("border-radius", "4px")
+            .style("padding", "8px")
+            .style("font-size", "12px")
+            .style("color", themeColors.textColor)
+            .style("pointer-events", "none")
+            .style("z-index", "1000");
+
+        // Add mouseover events for tooltips
+        const mouseover = function(event, d) {
+            tooltip.style("visibility", "visible");
+            d3.select(this).attr("r", 5);
+        };
+
+        const mousemove = function(event, d) {
+            const dateStr = d.date.toLocaleDateString();
+            let tooltipContent = `<strong>${dateStr}</strong><br/>`;
+            tooltipContent += `Temperature: ${d.temperature.toFixed(1)}°C<br/>`;
+
+            if (d.humidity !== null) {
+                tooltipContent += `Humidity: ${d.humidity.toFixed(1)}%<br/>`;
+            }
+
+            tooltipContent += `Precipitation: ${d.precipitation.toFixed(1)} mm`;
+
+            tooltip
+                .html(tooltipContent)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px");
+        };
+
+        const mouseleave = function(event, d) {
+            tooltip.style("visibility", "hidden");
+            d3.select(this).attr("r", 3);
+        };
+
+        // Attach tooltip events to points
+        svg.selectAll(".temp-point, .humidity-point, .precip-point")
+            .on("mouseover", mouseover)
+            .on("mousemove", mousemove)
+            .on("mouseleave", mouseleave);
+
+        // Add title
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", -margin.top / 2)
+            .attr("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "16px")
+            .style("font-weight", "bold")
+            .text("Historical Weather Data");
+
+        // Store chart instance for theme updates
+        if (!this.d3Charts) this.d3Charts = {};
+        this.d3Charts[containerId] = { svg, processedData, xScale, yTempScale, yHumidityScale, yPrecipScale };
     }
 
     renderTripleTimeSeriesChart(canvasId, dates, tempValues, humidityValues, precipValues, tempLabel, humidityLabel, precipLabel) {
