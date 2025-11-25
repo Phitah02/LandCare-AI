@@ -23,6 +23,7 @@ class LandCareApp {
         this.initEventListeners();
         this.initTabs();
         this.initFutureCharts();
+        this.initExportListeners(); // Initialize export functionality
         this.initAuth(); // Initialize auth
         this.initStatusIndicator();
         this.checkConnectionStatus();
@@ -856,16 +857,18 @@ class LandCareApp {
         const themeColors = this.getChartThemeColors();
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
-        // Set up margins and dimensions
+        // Set up margins and dimensions - Responsive with viewBox
         const margin = {top: 20, right: 80, bottom: 60, left: 60};
         const containerRect = container.node().getBoundingClientRect();
         const width = containerRect.width - margin.left - margin.right;
-        const height = 200 - margin.top - margin.bottom;
+        const height = containerRect.height - margin.top - margin.bottom;
 
-        // Create SVG
+        // Create SVG with viewBox for responsive scaling
         const svg = container.append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
+            .attr("width", containerRect.width)
+            .attr("height", containerRect.height)
+            .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+            .attr("preserveAspectRatio", "xMidYMid meet")
             .append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -900,15 +903,19 @@ class LandCareApp {
             .y1(d => yScale(d.upper))
             .curve(d3.curveMonotoneX);
 
-        // Add confidence area
+        // Add confidence area with enhanced visibility
         svg.append("path")
             .datum(data)
-            .attr("fill", themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.2)'))
+            .attr("class", "confidence-area")
+            .attr("fill", themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.3)'))
+            .attr("stroke", themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.5)'))
+            .attr("stroke-width", 1)
             .attr("d", area);
 
         // Add NDVI line
         svg.append("path")
             .datum(data)
+            .attr("class", "ndvi-line")
             .attr("fill", "none")
             .attr("stroke", themeColors.green)
             .attr("stroke-width", 3)
@@ -931,6 +938,7 @@ class LandCareApp {
         const yAxis = d3.axisLeft(yScale).tickFormat(d3.format(".2f"));
 
         svg.append("g")
+            .attr("class", "x-axis")
             .attr("transform", `translate(0,${height})`)
             .call(xAxis)
             .selectAll("text")
@@ -946,6 +954,7 @@ class LandCareApp {
             .text("Year");
 
         svg.append("g")
+            .attr("class", "y-axis")
             .call(yAxis)
             .selectAll("text")
             .style("fill", themeColors.textColor)
@@ -1017,9 +1026,97 @@ class LandCareApp {
             .style("font-size", "12px")
             .text("Predicted NDVI");
 
+        // Add zoom functionality with touch support
+        const zoom = d3.zoom()
+            .scaleExtent([1, 10])
+            .translateExtent([[0, 0], [width, height]])
+            .extent([[0, 0], [width, height]])
+            .touchable(true) // Enable touch support
+            .filter(event => {
+                // Allow zoom on mouse wheel, touch, or right-click drag
+                return event.type === 'wheel' ||
+                       event.type === 'touchstart' ||
+                       event.type === 'touchmove' ||
+                       event.type === 'touchend' ||
+                       (event.type === 'mousedown' && event.button === 2) ||
+                       (event.type === 'mousemove' && event.buttons === 2);
+            })
+            .on("zoom", (event) => {
+                const newXScale = event.transform.rescaleX(xScale);
+                const newYScale = event.transform.rescaleY(yScale);
+
+                // Update axes
+                svg.select(".x-axis").call(d3.axisBottom(newXScale).ticks(Math.min(data.length, 10)).tickFormat(d3.timeFormat("%b %Y")));
+                svg.select(".y-axis").call(d3.axisLeft(newYScale));
+
+                // Update line
+                svg.select(".time-series-line").attr("d", line.x(d => newXScale(d.date)).y(d => newYScale(d.value)));
+
+                // Update points
+                svg.selectAll(".point")
+                    .attr("cx", d => newXScale(d.date))
+                    .attr("cy", d => newYScale(d.value));
+            });
+
+        svg.call(zoom);
+
+        // Add touch gesture hints for mobile
+        if ('ontouchstart' in window) {
+            const touchHint = svg.append("text")
+                .attr("class", "touch-hint")
+                .attr("x", width / 2)
+                .attr("y", height - 10)
+                .attr("text-anchor", "middle")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "10px")
+                .style("opacity", 0.6)
+                .text("Pinch to zoom • Drag to pan");
+
+            // Hide hint after first interaction
+            svg.on("touchstart.zoom", () => {
+                touchHint.transition().duration(500).style("opacity", 0).remove();
+            });
+        }
+
+        // Add tooltip
+        const tooltip = d3.select("body").append("div")
+            .attr("class", "d3-tooltip")
+            .style("position", "absolute")
+            .style("visibility", "hidden")
+            .style("background-color", isDark ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.9)")
+            .style("border", `1px solid ${themeColors.gridColor}`)
+            .style("border-radius", "4px")
+            .style("padding", "8px")
+            .style("font-size", "12px")
+            .style("color", themeColors.textColor)
+            .style("pointer-events", "none")
+            .style("z-index", "1000");
+
+        // Add mouseover events for tooltips
+        svg.selectAll(".point")
+            .on("mouseover", function(event, d) {
+                tooltip.style("visibility", "visible");
+                const dateStr = d.date.toLocaleDateString();
+                let tooltipContent = `<strong>${dateStr}</strong><br/>`;
+                tooltipContent += `${label}: ${d.value.toFixed(3)}<br/>`;
+                tooltipContent += `Trend: ${d.value > data[Math.max(0, data.indexOf(d) - 1)]?.value ? 'Increasing' : 'Decreasing'}`;
+                tooltip.html(tooltipContent)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 10) + "px");
+                d3.select(this).attr("r", 5);
+            })
+            .on("mousemove", function(event) {
+                tooltip.style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 10) + "px");
+            })
+            .on("mouseleave", function() {
+                tooltip.style("visibility", "hidden");
+                d3.select(this).attr("r", 3);
+            });
+
         // Store chart instance for theme updates
         if (!this.d3Charts) this.d3Charts = {};
-        this.d3Charts[containerId] = { svg, data, xScale, yScale };
+        this.d3Charts[containerId] = { svg, data, xScale, yScale, zoom };
     }
 
     renderFutureErosionChart(years, erosionRisk, vegetationRisk, combinedRisk) {
@@ -1037,16 +1134,17 @@ class LandCareApp {
         const themeColors = this.getChartThemeColors();
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
-        // Set up margins and dimensions
+        // Set up margins and dimensions - Responsive to container
         const margin = {top: 20, right: 80, bottom: 80, left: 60};
         const containerRect = container.node().getBoundingClientRect();
         const width = containerRect.width - margin.left - margin.right;
-        const height = 200 - margin.top - margin.bottom;
-
-        // Create SVG
+        const height = containerRect.height - margin.top - margin.bottom;
+    
+        // Create SVG with viewBox for proper scaling
         const svg = container.append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
+            .attr("width", containerRect.width)
+            .attr("height", containerRect.height)
+            .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
             .append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -1087,6 +1185,7 @@ class LandCareApp {
         // Add lines
         svg.append("path")
             .datum(data)
+            .attr("class", "combined-line")
             .attr("fill", "none")
             .attr("stroke", themeColors.red)
             .attr("stroke-width", 4)
@@ -1094,6 +1193,7 @@ class LandCareApp {
 
         svg.append("path")
             .datum(data)
+            .attr("class", "erosion-line")
             .attr("fill", "none")
             .attr("stroke", themeColors.orange)
             .attr("stroke-width", 3)
@@ -1101,8 +1201,9 @@ class LandCareApp {
 
         svg.append("path")
             .datum(data)
+            .attr("class", "vegetation-line")
             .attr("fill", "none")
-            .attr("stroke", themeColors.blue)
+            .attr("stroke", themeColors.cyan)
             .attr("stroke-width", 3)
             .attr("d", vegetationLine);
 
@@ -1136,7 +1237,7 @@ class LandCareApp {
             .attr("cx", d => xScale(d.year) + xScale.bandwidth() / 2)
             .attr("cy", d => yScale(d.vegetation))
             .attr("r", 4)
-            .attr("fill", themeColors.blue)
+            .attr("fill", themeColors.cyan)
             .attr("stroke", isDark ? "#fff" : "#000")
             .attr("stroke-width", 1);
 
@@ -1145,6 +1246,7 @@ class LandCareApp {
         const yAxis = d3.axisLeft(yScale).tickFormat(d => d + '%');
 
         svg.append("g")
+            .attr("class", "x-axis")
             .attr("transform", `translate(0,${height})`)
             .call(xAxis)
             .selectAll("text")
@@ -1160,6 +1262,7 @@ class LandCareApp {
             .text("Year");
 
         svg.append("g")
+            .attr("class", "y-axis")
             .call(yAxis)
             .selectAll("text")
             .style("fill", themeColors.textColor)
@@ -1256,14 +1359,14 @@ class LandCareApp {
             .attr("y1", 30)
             .attr("x2", 20)
             .attr("y2", 30)
-            .attr("stroke", themeColors.blue)
+            .attr("stroke", themeColors.cyan)
             .attr("stroke-width", 3);
 
         legend.append("circle")
             .attr("cx", 10)
             .attr("cy", 30)
             .attr("r", 2)
-            .attr("fill", themeColors.blue)
+            .attr("fill", themeColors.cyan)
             .attr("stroke", isDark ? "#fff" : "#000")
             .attr("stroke-width", 1);
 
@@ -1275,23 +1378,131 @@ class LandCareApp {
             .style("font-size", "12px")
             .text("Vegetation Degradation Risk");
 
+        // Add zoom functionality with touch support
+        const zoom = d3.zoom()
+            .scaleExtent([1, 10])
+            .translateExtent([[0, 0], [width, height]])
+            .extent([[0, 0], [width, height]])
+            .touchable(true) // Enable touch support
+            .filter(event => {
+                // Allow zoom on mouse wheel, touch, or right-click drag
+                return event.type === 'wheel' ||
+                       event.type === 'touchstart' ||
+                       event.type === 'touchmove' ||
+                       event.type === 'touchend' ||
+                       (event.type === 'mousedown' && event.button === 2) ||
+                       (event.type === 'mousemove' && event.buttons === 2);
+            })
+            .on("zoom", (event) => {
+                const newXScale = event.transform.rescaleX(xScale);
+                const newYScale = event.transform.rescaleY(yScale);
+
+                // Update axes
+                svg.select(".x-axis").call(d3.axisBottom(newXScale));
+                svg.select(".y-axis").call(d3.axisLeft(newYScale).tickFormat(d => d + '%'));
+
+                // Update lines
+                svg.select(".combined-line").attr("d", combinedLine.x(d => newXScale(d.year) + xScale.bandwidth() / 2).y(d => newYScale(d.combined)));
+                svg.select(".erosion-line").attr("d", erosionLine.x(d => newXScale(d.year) + xScale.bandwidth() / 2).y(d => newYScale(d.erosion)));
+                svg.select(".vegetation-line").attr("d", vegetationLine.x(d => newXScale(d.year) + xScale.bandwidth() / 2).y(d => newYScale(d.vegetation)));
+
+                // Update points
+                svg.selectAll(".combined-point")
+                    .attr("cx", d => newXScale(d.year) + xScale.bandwidth() / 2)
+                    .attr("cy", d => newYScale(d.combined));
+                svg.selectAll(".erosion-point")
+                    .attr("cx", d => newXScale(d.year) + xScale.bandwidth() / 2)
+                    .attr("cy", d => newYScale(d.erosion));
+                svg.selectAll(".vegetation-point")
+                    .attr("cx", d => newXScale(d.year) + xScale.bandwidth() / 2)
+                    .attr("cy", d => newYScale(d.vegetation));
+            });
+
+        svg.call(zoom);
+
+        // Add touch gesture hints for mobile
+        if ('ontouchstart' in window) {
+            const touchHint = svg.append("text")
+                .attr("class", "touch-hint")
+                .attr("x", width / 2)
+                .attr("y", height - 10)
+                .attr("text-anchor", "middle")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "10px")
+                .style("opacity", 0.6)
+                .text("Pinch to zoom • Drag to pan");
+
+            // Hide hint after first interaction
+            svg.on("touchstart.zoom", () => {
+                touchHint.transition().duration(500).style("opacity", 0).remove();
+            });
+        }
+
+        // Add tooltip
+        const tooltip = d3.select("body").append("div")
+            .attr("class", "d3-tooltip")
+            .style("position", "absolute")
+            .style("visibility", "hidden")
+            .style("background-color", isDark ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.9)")
+            .style("border", `1px solid ${themeColors.gridColor}`)
+            .style("border-radius", "4px")
+            .style("padding", "8px")
+            .style("font-size", "12px")
+            .style("color", themeColors.textColor)
+            .style("pointer-events", "none")
+            .style("z-index", "1000");
+
+        // Add mouseover events for tooltips
+        const mouseover = function(event, d) {
+            tooltip.style("visibility", "visible");
+            d3.select(this).attr("r", d3.select(this).classed("combined-point") ? 8 : 6);
+        };
+
+        const mousemove = function(event, d) {
+            const dateStr = d.year;
+            let tooltipContent = `<strong>${dateStr}</strong><br/>`;
+            tooltipContent += `Combined Risk: ${d.combined}%<br/>`;
+            tooltipContent += `Soil Erosion: ${d.erosion}%<br/>`;
+            tooltipContent += `Vegetation Degradation: ${d.vegetation}%<br/>`;
+            tooltipContent += `Risk Level: ${d.combined >= 70 ? 'High' : d.combined >= 40 ? 'Medium' : 'Low'}`;
+            tooltip.html(tooltipContent)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px");
+        };
+
+        const mouseleave = function(event, d) {
+            tooltip.style("visibility", "hidden");
+            d3.select(this).attr("r", d3.select(this).classed("combined-point") ? 6 : 4);
+        };
+
+        // Attach tooltip events to points
+        svg.selectAll(".combined-point, .erosion-point, .vegetation-point")
+            .on("mouseover", mouseover)
+            .on("mousemove", mousemove)
+            .on("mouseleave", mouseleave);
+
         // Store chart instance for theme updates
         if (!this.d3Charts) this.d3Charts = {};
-        this.d3Charts[containerId] = { svg, data, xScale, yScale };
+        this.d3Charts[containerId] = { svg, data, xScale, yScale, zoom };
     }
 
     getChartThemeColors() {
         const root = document.documentElement;
         const isDark = root.getAttribute('data-theme') === 'dark';
 
+        // Colorblind-friendly palette (Okabe-Ito color scheme)
         return {
             textColor: getComputedStyle(root).getPropertyValue('--chart-text').trim(),
             gridColor: getComputedStyle(root).getPropertyValue('--chart-grid').trim(),
             backgroundColor: getComputedStyle(root).getPropertyValue('--chart-bg').trim(),
-            green: isDark ? '#4caf50' : '#2e7d32',
-            blue: isDark ? '#1976d2' : '#1565c0',
-            orange: isDark ? '#f57c00' : '#f57c00',
-            red: isDark ? '#d32f2f' : '#d32f2f'
+            // Primary colors - distinguishable for colorblind users
+            green: isDark ? '#44aa99' : '#117733',    // Teal/green
+            blue: isDark ? '#88ccee' : '#0072b2',     // Blue
+            orange: isDark ? '#ddcc77' : '#e69f00',   // Yellow/orange
+            red: isDark ? '#cc6677' : '#d55e00',      // Reddish
+            // Additional colors for complex charts
+            purple: isDark ? '#aa4499' : '#882255',   // Purple
+            cyan: isDark ? '#44aa99' : '#009e73'      // Cyan
         };
     }
 
@@ -2445,11 +2656,11 @@ class LandCareApp {
         const themeColors = this.getChartThemeColors();
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
-        // Set up margins and dimensions
+        // Set up margins and dimensions - Fixed desktop dimensions
         const margin = {top: 20, right: 80, bottom: 60, left: 60};
-        const containerRect = container.node().getBoundingClientRect();
-        const width = containerRect.width - margin.left - margin.right;
-        const height = 200 - margin.top - margin.bottom;
+        const isMobile = window.innerWidth < 768;
+        const width = isMobile ? Math.min(container.node().getBoundingClientRect().width - margin.left - margin.right, 504 - margin.left - margin.right) : 504 - margin.left - margin.right;
+        const height = isMobile ? Math.min(498 - margin.top - margin.bottom, 300) : 498 - margin.top - margin.bottom;
 
         // Create SVG
         const svg = container.append("svg")
@@ -2482,6 +2693,7 @@ class LandCareApp {
         // Add line
         svg.append("path")
             .datum(data)
+            .attr("class", "time-series-line")
             .attr("fill", "none")
             .attr("stroke", themeColors.green)
             .attr("stroke-width", 2)
@@ -2507,6 +2719,7 @@ class LandCareApp {
         const yAxis = d3.axisLeft(yScale);
 
         svg.append("g")
+            .attr("class", "x-axis")
             .attr("transform", `translate(0,${height})`)
             .call(xAxis)
             .selectAll("text")
@@ -2522,6 +2735,7 @@ class LandCareApp {
             .text("Date");
 
         svg.append("g")
+            .attr("class", "y-axis")
             .call(yAxis)
             .selectAll("text")
             .style("fill", themeColors.textColor)
@@ -2548,9 +2762,75 @@ class LandCareApp {
             .style("font-weight", "bold")
             .text(title);
 
+        // Add zoom functionality
+        const zoom = d3.zoom()
+            .scaleExtent([1, 10])
+            .translateExtent([[0, 0], [width, height]])
+            .extent([[0, 0], [width, height]])
+            .on("zoom", (event) => {
+                const newXScale = event.transform.rescaleX(xScale);
+                const newYScale = event.transform.rescaleY(yScale);
+
+                // Update axes
+                svg.select(".x-axis").call(d3.axisBottom(newXScale));
+                svg.select(".y-axis").call(d3.axisLeft(newYScale).tickFormat(d3.format(".2f")));
+
+                // Update line
+                svg.select(".ndvi-line").attr("d", line.x(d => newXScale(d.year) + xScale.bandwidth() / 2).y(d => newYScale(d.ndvi)));
+
+                // Update confidence area
+                svg.select(".confidence-area").attr("d", area.x(d => newXScale(d.year) + xScale.bandwidth() / 2).y0(d => newYScale(d.lower)).y1(d => newYScale(d.upper)));
+
+                // Update points
+                svg.selectAll(".ndvi-point")
+                    .attr("cx", d => newXScale(d.year) + xScale.bandwidth() / 2)
+                    .attr("cy", d => newYScale(d.ndvi));
+            });
+
+        svg.call(zoom);
+
+        // Add tooltip
+        const tooltip = d3.select("body").append("div")
+            .attr("class", "d3-tooltip")
+            .style("position", "absolute")
+            .style("visibility", "hidden")
+            .style("background-color", isDark ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.9)")
+            .style("border", `1px solid ${themeColors.gridColor}`)
+            .style("border-radius", "4px")
+            .style("padding", "8px")
+            .style("font-size", "12px")
+            .style("color", themeColors.textColor)
+            .style("pointer-events", "none")
+            .style("z-index", "1000");
+
+        // Add mouseover events for tooltips
+        svg.selectAll(".ndvi-point")
+            .on("mouseover", function(event, d) {
+                tooltip.style("visibility", "visible");
+                const dateStr = d.year;
+                let tooltipContent = `<strong>${dateStr}</strong><br/>`;
+                tooltipContent += `NDVI: ${d.ndvi}<br/>`;
+                if (d.upper !== null) {
+                    tooltipContent += `Confidence: ${d.lower} - ${d.upper}<br/>`;
+                }
+                tooltipContent += `Vegetation Health: ${d.ndvi >= 0.6 ? 'Excellent' : d.ndvi >= 0.4 ? 'Good' : d.ndvi >= 0.2 ? 'Moderate' : 'Poor'}`;
+                tooltip.html(tooltipContent)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 10) + "px");
+                d3.select(this).attr("r", 8);
+            })
+            .on("mousemove", function(event) {
+                tooltip.style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 10) + "px");
+            })
+            .on("mouseleave", function() {
+                tooltip.style("visibility", "hidden");
+                d3.select(this).attr("r", 6);
+            });
+
         // Store chart instance for theme updates
         if (!this.d3Charts) this.d3Charts = {};
-        this.d3Charts[containerId] = { svg, data, xScale, yScale };
+        this.d3Charts[containerId] = { svg, data, xScale, yScale, zoom };
     }
 
 
@@ -2562,12 +2842,12 @@ class LandCareApp {
         const themeColors = this.getChartThemeColors();
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
-        // Set up margins and dimensions
+        // Set up margins and dimensions - Fixed desktop dimensions
         const margin = {top: 20, right: 80, bottom: 60, left: 60};
         const container = d3.select(`#${containerId}`);
-        const containerRect = container.node().getBoundingClientRect();
-        const width = containerRect.width - margin.left - margin.right;
-        const height = 300 - margin.top - margin.bottom;
+        const isMobile = window.innerWidth < 768;
+        const width = isMobile ? Math.min(container.node().getBoundingClientRect().width - margin.left - margin.right, 1083 - margin.left - margin.right) : 1083 - margin.left - margin.right;
+        const height = isMobile ? Math.min(498 - margin.top - margin.bottom, 300) : 498 - margin.top - margin.bottom;
 
         // Create SVG
         const svg = container.append("svg")
@@ -2743,7 +3023,7 @@ class LandCareApp {
             svg.append("path")
                 .datum(processedData.filter(d => d.humidity !== null))
                 .attr("fill", "none")
-                .attr("stroke", themeColors.green)
+                .attr("stroke", themeColors.cyan)
                 .attr("stroke-width", 2)
                 .attr("stroke-dasharray", "5,5")
                 .attr("d", humidityLine);
@@ -2755,7 +3035,7 @@ class LandCareApp {
                 .attr("cx", d => xScale(d.date))
                 .attr("cy", d => yHumidityScale(d.humidity))
                 .attr("r", 3)
-                .attr("fill", themeColors.green)
+                .attr("fill", themeColors.cyan)
                 .attr("stroke", isDark ? "#fff" : "#000")
                 .attr("stroke-width", 1);
         }
@@ -2815,7 +3095,7 @@ class LandCareApp {
                 .attr("y1", 20)
                 .attr("x2", 20)
                 .attr("y2", 20)
-                .attr("stroke", themeColors.green)
+                .attr("stroke", themeColors.cyan)
                 .attr("stroke-width", 2)
                 .attr("stroke-dasharray", "5,5");
 
@@ -2823,7 +3103,7 @@ class LandCareApp {
                 .attr("cx", 10)
                 .attr("cy", 20)
                 .attr("r", 3)
-                .attr("fill", themeColors.green)
+                .attr("fill", themeColors.cyan)
                 .attr("stroke", isDark ? "#fff" : "#000")
                 .attr("stroke-width", 1);
 
@@ -2862,29 +3142,67 @@ class LandCareApp {
             .style("font-size", "12px")
             .text("Precipitation");
 
-        // Add zoom functionality
+        // Add zoom functionality with touch support
         const zoom = d3.zoom()
             .scaleExtent([1, 10])
             .translateExtent([[0, 0], [width, height]])
             .extent([[0, 0], [width, height]])
+            .touchable(true) // Enable touch support
+            .filter(event => {
+                // Allow zoom on mouse wheel, touch, or right-click drag
+                return event.type === 'wheel' ||
+                       event.type === 'touchstart' ||
+                       event.type === 'touchmove' ||
+                       event.type === 'touchend' ||
+                       (event.type === 'mousedown' && event.button === 2) ||
+                       (event.type === 'mousemove' && event.buttons === 2);
+            })
             .on("zoom", (event) => {
                 const newXScale = event.transform.rescaleX(xScale);
+                const newYTempScale = event.transform.rescaleY(yTempScale);
+                const newYHumidityScale = event.transform.rescaleY(yHumidityScale);
+                const newYPrecipScale = event.transform.rescaleY(yPrecipScale);
+
+                // Update axes
                 svg.select(".x-axis").call(xAxis.scale(newXScale));
+                svg.select(".y-axis").call(yTempAxis.scale(newYTempScale));
+                if (processedData.some(d => d.humidity !== null)) {
+                    svg.select(".y-axis-humidity").call(yHumidityAxis.scale(newYHumidityScale));
+                }
+                svg.select(".y-axis-precip").call(yPrecipAxis.scale(newYPrecipScale));
 
                 // Update lines and points
-                svg.selectAll(".temp-line").attr("d", tempLine.x(d => newXScale(d.date)));
-                svg.selectAll(".temp-point").attr("cx", d => newXScale(d.date));
+                svg.selectAll(".temp-line").attr("d", tempLine.x(d => newXScale(d.date)).y(d => newYTempScale(d.temperature)));
+                svg.selectAll(".temp-point").attr("cx", d => newXScale(d.date)).attr("cy", d => newYTempScale(d.temperature));
 
                 if (processedData.some(d => d.humidity !== null)) {
-                    svg.selectAll(".humidity-line").attr("d", humidityLine.x(d => newXScale(d.date)));
-                    svg.selectAll(".humidity-point").attr("cx", d => newXScale(d.date));
+                    svg.selectAll(".humidity-line").attr("d", humidityLine.x(d => newXScale(d.date)).y(d => newYHumidityScale(d.humidity)));
+                    svg.selectAll(".humidity-point").attr("cx", d => newXScale(d.date)).attr("cy", d => newYHumidityScale(d.humidity));
                 }
 
-                svg.selectAll(".precip-line").attr("d", precipLine.x(d => newXScale(d.date)));
-                svg.selectAll(".precip-point").attr("cx", d => newXScale(d.date));
+                svg.selectAll(".precip-line").attr("d", precipLine.x(d => newXScale(d.date)).y(d => newYPrecipScale(d.precipitation)));
+                svg.selectAll(".precip-point").attr("cx", d => newXScale(d.date)).attr("cy", d => newYPrecipScale(d.precipitation));
             });
 
         svg.call(zoom);
+
+        // Add touch gesture hints for mobile
+        if ('ontouchstart' in window) {
+            const touchHint = svg.append("text")
+                .attr("class", "touch-hint")
+                .attr("x", width / 2)
+                .attr("y", height - 10)
+                .attr("text-anchor", "middle")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "10px")
+                .style("opacity", 0.6)
+                .text("Pinch to zoom • Drag to pan");
+
+            // Hide hint after first interaction
+            svg.on("touchstart.zoom", () => {
+                touchHint.transition().duration(500).style("opacity", 0).remove();
+            });
+        }
 
         // Add tooltip
         const tooltip = d3.select("body").append("div")
@@ -2909,13 +3227,30 @@ class LandCareApp {
         const mousemove = function(event, d) {
             const dateStr = d.date.toLocaleDateString();
             let tooltipContent = `<strong>${dateStr}</strong><br/>`;
-            tooltipContent += `Temperature: ${d.temperature.toFixed(1)}°C<br/>`;
+
+            if (d.temp !== null) {
+                tooltipContent += `Temperature: ${d.temp.toFixed(1)}°C`;
+                if (d.tempUpper !== null && d.tempLower !== null) {
+                    tooltipContent += ` (Range: ${d.tempLower.toFixed(1)} - ${d.tempUpper.toFixed(1)}°C)`;
+                }
+                tooltipContent += `<br/>`;
+            }
+
+            if (d.precip !== null) {
+                tooltipContent += `Precipitation: ${d.precip.toFixed(1)} mm`;
+                if (d.precipUpper !== null && d.precipLower !== null) {
+                    tooltipContent += ` (Range: ${d.precipLower.toFixed(1)} - ${d.precipUpper.toFixed(1)} mm)`;
+                }
+                tooltipContent += `<br/>`;
+            }
 
             if (d.humidity !== null) {
                 tooltipContent += `Humidity: ${d.humidity.toFixed(1)}%<br/>`;
             }
 
-            tooltipContent += `Precipitation: ${d.precipitation.toFixed(1)} mm`;
+            // Add forecast metadata
+            tooltipContent += `Forecast Type: Weather with Uncertainty<br/>`;
+            tooltipContent += `Confidence Level: 95%`;
 
             tooltip
                 .html(tooltipContent)
@@ -2961,11 +3296,11 @@ class LandCareApp {
         const themeColors = this.getChartThemeColors();
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
-        // Set up margins and dimensions
+        // Set up margins and dimensions - Fixed desktop dimensions
         const margin = {top: 20, right: 80, bottom: 60, left: 60};
-        const containerRect = container.node().getBoundingClientRect();
-        const width = containerRect.width - margin.left - margin.right;
-        const height = 200 - margin.top - margin.bottom;
+        const isMobile = window.innerWidth < 768;
+        const width = isMobile ? Math.min(container.node().getBoundingClientRect().width - margin.left - margin.right, 504 - margin.left - margin.right) : 504 - margin.left - margin.right;
+        const height = isMobile ? Math.min(498 - margin.top - margin.bottom, 300) : 498 - margin.top - margin.bottom;
 
         // Create SVG
         const svg = container.append("svg")
@@ -2995,8 +3330,9 @@ class LandCareApp {
             .range([height, 0]);
 
         // Create area generator for confidence
+        let area;
         if (data.some(d => d.lower !== null)) {
-            const area = d3.area()
+            area = d3.area()
                 .x(d => xScale(d.date))
                 .y0(d => yScale(d.lower))
                 .y1(d => yScale(d.upper))
@@ -3004,7 +3340,10 @@ class LandCareApp {
 
             svg.append("path")
                 .datum(data.filter(d => d.lower !== null))
-                .attr("fill", themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.2)'))
+                .attr("class", "forecast-area")
+                .attr("fill", themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.3)'))
+                .attr("stroke", themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.5)'))
+                .attr("stroke-width", 1)
                 .attr("d", area);
         }
 
@@ -3017,6 +3356,7 @@ class LandCareApp {
         // Add line
         svg.append("path")
             .datum(data)
+            .attr("class", "forecast-line")
             .attr("fill", "none")
             .attr("stroke", themeColors.orange)
             .attr("stroke-width", 2)
@@ -3042,6 +3382,7 @@ class LandCareApp {
         const yAxis = d3.axisLeft(yScale);
 
         svg.append("g")
+            .attr("class", "x-axis")
             .attr("transform", `translate(0,${height})`)
             .call(xAxis)
             .selectAll("text")
@@ -3057,6 +3398,7 @@ class LandCareApp {
             .text("Date");
 
         svg.append("g")
+            .attr("class", "y-axis")
             .call(yAxis)
             .selectAll("text")
             .style("fill", themeColors.textColor)
@@ -3083,9 +3425,106 @@ class LandCareApp {
             .style("font-weight", "bold")
             .text(title);
 
+        // Add zoom functionality with touch support
+        const zoom = d3.zoom()
+            .scaleExtent([1, 10])
+            .translateExtent([[0, 0], [width, height]])
+            .extent([[0, 0], [width, height]])
+            .touchable(true) // Enable touch support
+            .filter(event => {
+                // Allow zoom on mouse wheel, touch, or right-click drag
+                return event.type === 'wheel' ||
+                       event.type === 'touchstart' ||
+                       event.type === 'touchmove' ||
+                       event.type === 'touchend' ||
+                       (event.type === 'mousedown' && event.button === 2) ||
+                       (event.type === 'mousemove' && event.buttons === 2);
+            })
+            .on("zoom", (event) => {
+                const newXScale = event.transform.rescaleX(xScale);
+                const newYScale = event.transform.rescaleY(yScale);
+
+                // Update axes
+                svg.select(".x-axis").call(d3.axisBottom(newXScale).ticks(Math.min(data.length, 10)).tickFormat(d3.timeFormat("%b %Y")));
+                svg.select(".y-axis").call(d3.axisLeft(newYScale));
+
+                // Update area if exists
+                if (area) {
+                    svg.select(".forecast-area").attr("d", area.x(d => newXScale(d.date)).y0(d => newYScale(d.lower)).y1(d => newYScale(d.upper)));
+                }
+
+                // Update line
+                svg.select(".forecast-line").attr("d", line.x(d => newXScale(d.date)).y(d => newYScale(d.value)));
+
+                // Update points
+                svg.selectAll(".point")
+                    .attr("cx", d => newXScale(d.date))
+                    .attr("cy", d => newYScale(d.value));
+            });
+
+        svg.call(zoom);
+
+        // Add touch gesture hints for mobile
+        if ('ontouchstart' in window) {
+            const touchHint = svg.append("text")
+                .attr("class", "touch-hint")
+                .attr("x", width / 2)
+                .attr("y", height - 10)
+                .attr("text-anchor", "middle")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "10px")
+                .style("opacity", 0.6)
+                .text("Pinch to zoom • Drag to pan");
+
+            // Hide hint after first interaction
+            svg.on("touchstart.zoom", () => {
+                touchHint.transition().duration(500).style("opacity", 0).remove();
+            });
+        }
+
+        // Add tooltip
+        const tooltip = d3.select("body").append("div")
+            .attr("class", "d3-tooltip")
+            .style("position", "absolute")
+            .style("visibility", "hidden")
+            .style("background-color", isDark ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.9)")
+            .style("border", `1px solid ${themeColors.gridColor}`)
+            .style("border-radius", "4px")
+            .style("padding", "8px")
+            .style("font-size", "12px")
+            .style("color", themeColors.textColor)
+            .style("pointer-events", "none")
+            .style("z-index", "1000");
+
+        // Add mouseover events for tooltips
+        svg.selectAll(".point")
+            .on("mouseover", function(event, d) {
+                tooltip.style("visibility", "visible");
+                const dateStr = d.date.toLocaleDateString();
+                let tooltipContent = `<strong>${dateStr}</strong><br/>`;
+                tooltipContent += `${title.replace(' Forecast', '')}: ${d.value.toFixed(3)}<br/>`;
+                if (d.lower !== null && d.upper !== null) {
+                    tooltipContent += `Confidence: ${d.lower.toFixed(3)} - ${d.upper.toFixed(3)}<br/>`;
+                    tooltipContent += `Uncertainty: ±${((d.upper - d.lower) / 2).toFixed(3)}`;
+                }
+                tooltipContent += `<br/>Forecast Type: ${title}`;
+                tooltip.html(tooltipContent)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 10) + "px");
+                d3.select(this).attr("r", 5);
+            })
+            .on("mousemove", function(event) {
+                tooltip.style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 10) + "px");
+            })
+            .on("mouseleave", function() {
+                tooltip.style("visibility", "hidden");
+                d3.select(this).attr("r", 3);
+            });
+
         // Store chart instance for theme updates
         if (!this.d3Charts) this.d3Charts = {};
-        this.d3Charts[containerId] = { svg, data, xScale, yScale };
+        this.d3Charts[containerId] = { svg, data, xScale, yScale, zoom };
     }
 
     renderWeatherForecastChart(containerId, dates, tempValues, rainValues) {
@@ -3099,16 +3538,17 @@ class LandCareApp {
         const themeColors = this.getChartThemeColors();
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
-        // Set up margins and dimensions
+        // Set up margins and dimensions - Responsive to container
         const margin = {top: 20, right: 80, bottom: 60, left: 60};
         const containerRect = container.node().getBoundingClientRect();
         const width = containerRect.width - margin.left - margin.right;
-        const height = 200 - margin.top - margin.bottom;
-
-        // Create SVG
+        const height = containerRect.height - margin.top - margin.bottom;
+    
+        // Create SVG with viewBox for proper scaling
         const svg = container.append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
+            .attr("width", containerRect.width)
+            .attr("height", containerRect.height)
+            .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
             .append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -3149,6 +3589,7 @@ class LandCareApp {
         // Add lines
         svg.append("path")
             .datum(data)
+            .attr("class", "temp-line")
             .attr("fill", "none")
             .attr("stroke", themeColors.red)
             .attr("stroke-width", 2)
@@ -3156,6 +3597,7 @@ class LandCareApp {
 
         svg.append("path")
             .datum(data)
+            .attr("class", "precip-line")
             .attr("fill", "none")
             .attr("stroke", themeColors.blue)
             .attr("stroke-width", 2)
@@ -3193,6 +3635,7 @@ class LandCareApp {
         const yPrecipAxis = d3.axisRight(yPrecipScale);
 
         svg.append("g")
+            .attr("class", "x-axis")
             .attr("transform", `translate(0,${height})`)
             .call(xAxis)
             .selectAll("text")
@@ -3208,6 +3651,7 @@ class LandCareApp {
             .text("Date");
 
         svg.append("g")
+            .attr("class", "y-axis-left")
             .call(yTempAxis)
             .selectAll("text")
             .style("fill", themeColors.textColor)
@@ -3225,6 +3669,7 @@ class LandCareApp {
             .text("Temperature (°C)");
 
         svg.append("g")
+            .attr("class", "y-axis-right")
             .attr("transform", `translate(${width},0)`)
             .call(yPrecipAxis)
             .selectAll("text")
@@ -3306,9 +3751,236 @@ class LandCareApp {
             .style("font-size", "12px")
             .text("Precipitation");
 
+        // Add zoom functionality with touch support
+        const zoom = d3.zoom()
+            .scaleExtent([1, 10])
+            .translateExtent([[0, 0], [width, height]])
+            .extent([[0, 0], [width, height]])
+            .touchable(true) // Enable touch support
+            .filter(event => {
+                // Allow zoom on mouse wheel, touch, or right-click drag
+                return event.type === 'wheel' ||
+                       event.type === 'touchstart' ||
+                       event.type === 'touchmove' ||
+                       event.type === 'touchend' ||
+                       (event.type === 'mousedown' && event.button === 2) ||
+                       (event.type === 'mousemove' && event.buttons === 2);
+            })
+            .on("zoom", (event) => {
+                const newXScale = event.transform.rescaleX(xScale);
+                const newYTempScale = event.transform.rescaleY(yTempScale);
+                const newYPrecipScale = event.transform.rescaleY(yPrecipScale);
+
+                // Update axes
+                svg.select(".x-axis").call(d3.axisBottom(newXScale).ticks(Math.min(data.length, 10)).tickFormat(d3.timeFormat("%b %d")));
+                svg.select(".y-axis-left").call(d3.axisLeft(newYTempScale));
+                svg.select(".y-axis-right").call(d3.axisRight(newYPrecipScale));
+
+                // Update lines
+                svg.select(".temp-line").attr("d", tempLine.x(d => newXScale(d.date)).y(d => newYTempScale(d.temperature)));
+                svg.select(".precip-line").attr("d", precipLine.x(d => newXScale(d.date)).y(d => newYPrecipScale(d.precipitation)));
+
+                // Update points
+                svg.selectAll(".temp-point")
+                    .attr("cx", d => newXScale(d.date))
+                    .attr("cy", d => newYTempScale(d.temperature));
+                svg.selectAll(".precip-point")
+                    .attr("cx", d => newXScale(d.date))
+                    .attr("cy", d => newYPrecipScale(d.precipitation));
+            });
+
+        svg.call(zoom);
+
+        // Add touch gesture hints for mobile
+        if ('ontouchstart' in window) {
+            const touchHint = svg.append("text")
+                .attr("class", "touch-hint")
+                .attr("x", width / 2)
+                .attr("y", height - 10)
+                .attr("text-anchor", "middle")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "10px")
+                .style("opacity", 0.6)
+                .text("Pinch to zoom • Drag to pan");
+
+            // Hide hint after first interaction
+            svg.on("touchstart.zoom", () => {
+                touchHint.transition().duration(500).style("opacity", 0).remove();
+            });
+        }
+
+        // Add tooltip
+        const tooltip = d3.select("body").append("div")
+            .attr("class", "d3-tooltip")
+            .style("position", "absolute")
+            .style("visibility", "hidden")
+            .style("background-color", isDark ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.9)")
+            .style("border", `1px solid ${themeColors.gridColor}`)
+            .style("border-radius", "4px")
+            .style("padding", "8px")
+            .style("font-size", "12px")
+            .style("color", themeColors.textColor)
+            .style("pointer-events", "none")
+            .style("z-index", "1000");
+
+        // Add mouseover events for tooltips
+        const mouseover = function(event, d) {
+            tooltip.style("visibility", "visible");
+            d3.select(this).attr("r", 5);
+        };
+
+        const mousemove = function(event, d) {
+            const dateStr = d.date.toLocaleDateString();
+            let tooltipContent = `<strong>${dateStr}</strong><br/>`;
+            tooltipContent += `Temperature: ${d.temperature.toFixed(1)}°C<br/>`;
+            tooltipContent += `Precipitation: ${d.precipitation.toFixed(1)} mm<br/>`;
+            tooltipContent += `Weather Conditions: ${d.temperature > 25 ? 'Warm' : d.temperature > 15 ? 'Moderate' : 'Cool'}`;
+            tooltip.html(tooltipContent)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px");
+        };
+
+        const mouseleave = function(event, d) {
+            tooltip.style("visibility", "hidden");
+            d3.select(this).attr("r", 3);
+        };
+
+        // Attach tooltip events to points
+        svg.selectAll(".temp-point, .precip-point")
+            .on("mouseover", mouseover)
+            .on("mousemove", mousemove)
+            .on("mouseleave", mouseleave);
+
         // Store chart instance for theme updates
         if (!this.d3Charts) this.d3Charts = {};
-        this.d3Charts[containerId] = { svg, data, xScale, yTempScale, yPrecipScale };
+        this.d3Charts[containerId] = { svg, data, xScale, yTempScale, yPrecipScale, zoom };
+    }
+
+    // Export functionality
+    initExportListeners() {
+        document.addEventListener('click', (event) => {
+            if (event.target.classList.contains('export-btn')) {
+                const chartId = event.target.dataset.chart;
+                const format = event.target.classList.contains('export-png') ? 'png' :
+                              event.target.classList.contains('export-svg') ? 'svg' : 'csv';
+
+                this.exportChart(chartId, format);
+            }
+        });
+    }
+
+    exportChart(chartId, format) {
+        const chartData = this.d3Charts[chartId];
+        if (!chartData || !chartData.svg) {
+            this.showError('Chart not found or not yet rendered');
+            return;
+        }
+
+        const svgElement = chartData.svg.node();
+        const title = this.getChartTitle(chartId);
+
+        switch (format) {
+            case 'png':
+                this.exportAsPNG(svgElement, title);
+                break;
+            case 'svg':
+                this.exportAsSVG(svgElement, title);
+                break;
+            case 'csv':
+                this.exportAsCSV(chartData.data, title, chartId);
+                break;
+        }
+    }
+
+    exportAsPNG(svgElement, title) {
+        // Create a canvas element
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+
+        // Create an image from the SVG
+        const img = new Image();
+        img.onload = () => {
+            canvas.width = svgElement.clientWidth;
+            canvas.height = svgElement.clientHeight;
+            ctx.drawImage(img, 0, 0);
+
+            // Create download link
+            const link = document.createElement('a');
+            link.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        };
+
+        img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+    }
+
+    exportAsSVG(svgElement, title) {
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(svgBlob);
+        link.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.svg`;
+        link.click();
+    }
+
+    exportAsCSV(data, title, chartId) {
+        let csvContent = 'data:text/csv;charset=utf-8,';
+
+        // Add headers based on chart type
+        if (chartId.includes('vegetation') || chartId.includes('ndvi')) {
+            csvContent += 'Year,NDVI';
+            if (data[0] && data[0].upper !== undefined) {
+                csvContent += ',Confidence_Lower,Confidence_Upper';
+            }
+            csvContent += '\n';
+
+            data.forEach(d => {
+                csvContent += `${d.year || d.date},${d.ndvi || d.value}`;
+                if (d.upper !== undefined) {
+                    csvContent += `,${d.lower},${d.upper}`;
+                }
+                csvContent += '\n';
+            });
+        } else if (chartId.includes('erosion')) {
+            csvContent += 'Year,Combined_Risk,Erosion_Risk,Vegetation_Risk\n';
+            data.forEach(d => {
+                csvContent += `${d.year},${d.combined},${d.erosion},${d.vegetation}\n`;
+            });
+        } else if (chartId.includes('weather')) {
+            csvContent += 'Date,Temperature,Precipitation';
+            if (data[0] && data[0].humidity !== undefined) {
+                csvContent += ',Humidity';
+            }
+            csvContent += '\n';
+
+            data.forEach(d => {
+                csvContent += `${d.date.toISOString().split('T')[0]},${d.temperature || d.temp || ''},${d.precipitation || d.precip || ''}`;
+                if (d.humidity !== undefined) {
+                    csvContent += `,${d.humidity}`;
+                }
+                csvContent += '\n';
+            });
+        }
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
+        link.click();
+    }
+
+    getChartTitle(chartId) {
+        const titleMap = {
+            'futureVegetationChart': 'Predicted Vegetation Health',
+            'futureErosionChart': 'Future Soil Erosion Risk',
+            'historical-ndvi-chart': 'Historical Vegetation Indices',
+            'historical-weather-chart': 'Historical Weather Data',
+            'forecast-ndvi-chart': 'Forecasted Vegetation Indices',
+            'forecast-weather-chart': 'Forecasted Weather Data'
+        };
+        return titleMap[chartId] || 'Chart Export';
     }
 
     renderWeatherForecastChartWithUncertainty(containerId, dates, temperature, precipitation, humidity) {
@@ -3322,11 +3994,11 @@ class LandCareApp {
         const themeColors = this.getChartThemeColors();
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
-        // Set up margins and dimensions
+        // Set up margins and dimensions - Fixed desktop dimensions
         const margin = {top: 20, right: 100, bottom: 60, left: 60};
-        const containerRect = container.node().getBoundingClientRect();
-        const width = containerRect.width - margin.left - margin.right;
-        const height = 200 - margin.top - margin.bottom;
+        const isMobile = window.innerWidth < 768;
+        const width = isMobile ? Math.min(container.node().getBoundingClientRect().width - margin.left - margin.right, 1083 - margin.left - margin.right) : 1083 - margin.left - margin.right;
+        const height = isMobile ? Math.min(498 - margin.top - margin.bottom, 300) : 498 - margin.top - margin.bottom;
 
         // Create SVG
         const svg = container.append("svg")
@@ -3367,8 +4039,9 @@ class LandCareApp {
             .range([height, 0]);
 
         // Create area generators for uncertainty bands
+        let tempArea, precipArea;
         if (data.some(d => d.tempUpper !== null)) {
-            const tempArea = d3.area()
+            tempArea = d3.area()
                 .x(d => xScale(d.date))
                 .y0(d => yTempScale(d.tempLower))
                 .y1(d => yTempScale(d.tempUpper))
@@ -3376,12 +4049,15 @@ class LandCareApp {
 
             svg.append("path")
                 .datum(data.filter(d => d.tempUpper !== null))
-                .attr("fill", themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.1)'))
+                .attr("class", "temp-area")
+                .attr("fill", themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.2)'))
+                .attr("stroke", themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.4)'))
+                .attr("stroke-width", 1)
                 .attr("d", tempArea);
         }
 
         if (data.some(d => d.precipUpper !== null)) {
-            const precipArea = d3.area()
+            precipArea = d3.area()
                 .x(d => xScale(d.date))
                 .y0(d => yPrecipScale(d.precipLower))
                 .y1(d => yPrecipScale(d.precipUpper))
@@ -3389,7 +4065,10 @@ class LandCareApp {
 
             svg.append("path")
                 .datum(data.filter(d => d.precipUpper !== null))
-                .attr("fill", themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.1)'))
+                .attr("class", "precip-area")
+                .attr("fill", themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.2)'))
+                .attr("stroke", themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.4)'))
+                .attr("stroke-width", 1)
                 .attr("d", precipArea);
         }
 
@@ -3416,6 +4095,7 @@ class LandCareApp {
         if (data.some(d => d.temp !== null)) {
             svg.append("path")
                 .datum(data.filter(d => d.temp !== null))
+                .attr("class", "temp-line")
                 .attr("fill", "none")
                 .attr("stroke", themeColors.red)
                 .attr("stroke-width", 2)
@@ -3425,6 +4105,7 @@ class LandCareApp {
         if (data.some(d => d.precip !== null)) {
             svg.append("path")
                 .datum(data.filter(d => d.precip !== null))
+                .attr("class", "precip-line")
                 .attr("fill", "none")
                 .attr("stroke", themeColors.blue)
                 .attr("stroke-width", 2)
@@ -3434,8 +4115,9 @@ class LandCareApp {
         if (data.some(d => d.humidity !== null)) {
             svg.append("path")
                 .datum(data.filter(d => d.humidity !== null))
+                .attr("class", "humidity-line")
                 .attr("fill", "none")
-                .attr("stroke", themeColors.green)
+                .attr("stroke", themeColors.cyan)
                 .attr("stroke-width", 2)
                 .attr("stroke-dasharray", "5,5")
                 .attr("d", humidityLine);
@@ -3476,7 +4158,7 @@ class LandCareApp {
                 .attr("cx", d => xScale(d.date))
                 .attr("cy", d => yPrecipScale(d.humidity))
                 .attr("r", 3)
-                .attr("fill", themeColors.green)
+                .attr("fill", themeColors.cyan)
                 .attr("stroke", isDark ? "#fff" : "#000")
                 .attr("stroke-width", 1);
         }
@@ -3490,6 +4172,7 @@ class LandCareApp {
         const yPrecipAxis = d3.axisRight(yPrecipScale);
 
         svg.append("g")
+            .attr("class", "x-axis")
             .attr("transform", `translate(0,${height})`)
             .call(xAxis)
             .selectAll("text")
@@ -3505,6 +4188,7 @@ class LandCareApp {
             .text("Date");
 
         svg.append("g")
+            .attr("class", "y-axis-left")
             .call(yTempAxis)
             .selectAll("text")
             .style("fill", themeColors.textColor)
@@ -3522,6 +4206,7 @@ class LandCareApp {
             .text("Temperature (°C)");
 
         svg.append("g")
+            .attr("class", "y-axis-right")
             .attr("transform", `translate(${width},0)`)
             .call(yPrecipAxis)
             .selectAll("text")
@@ -3617,7 +4302,7 @@ class LandCareApp {
                 .attr("y1", legendY)
                 .attr("x2", 20)
                 .attr("y2", legendY)
-                .attr("stroke", themeColors.green)
+                .attr("stroke", themeColors.cyan)
                 .attr("stroke-width", 2)
                 .attr("stroke-dasharray", "5,5");
 
@@ -3625,7 +4310,7 @@ class LandCareApp {
                 .attr("cx", 10)
                 .attr("cy", legendY)
                 .attr("r", 3)
-                .attr("fill", themeColors.green)
+                .attr("fill", themeColors.cyan)
                 .attr("stroke", isDark ? "#fff" : "#000")
                 .attr("stroke-width", 1);
 
@@ -3638,9 +4323,91 @@ class LandCareApp {
                 .text("Humidity");
         }
 
+        // Add zoom functionality with touch support
+        const zoom = d3.zoom()
+            .scaleExtent([1, 10])
+            .translateExtent([[0, 0], [width, height]])
+            .extent([[0, 0], [width, height]])
+            .touchable(true) // Enable touch support
+            .filter(event => {
+                // Allow zoom on mouse wheel, touch, or right-click drag
+                return event.type === 'wheel' ||
+                       event.type === 'touchstart' ||
+                       event.type === 'touchmove' ||
+                       event.type === 'touchend' ||
+                       (event.type === 'mousedown' && event.button === 2) ||
+                       (event.type === 'mousemove' && event.buttons === 2);
+            })
+            .on("zoom", (event) => {
+                const newXScale = event.transform.rescaleX(xScale);
+                const newYTempScale = event.transform.rescaleY(yTempScale);
+                const newYPrecipScale = event.transform.rescaleY(yPrecipScale);
+
+                // Update axes
+                svg.select(".x-axis").call(d3.axisBottom(newXScale).ticks(Math.min(data.length, 10)).tickFormat(d3.timeFormat("%b %d")));
+                svg.select(".y-axis-left").call(d3.axisLeft(newYTempScale));
+                svg.select(".y-axis-right").call(d3.axisRight(newYPrecipScale));
+
+                // Update areas if they exist
+                if (tempArea) {
+                    svg.select(".temp-area").attr("d", tempArea.x(d => newXScale(d.date)).y0(d => newYTempScale(d.tempLower)).y1(d => newYTempScale(d.tempUpper)));
+                }
+                if (precipArea) {
+                    svg.select(".precip-area").attr("d", precipArea.x(d => newXScale(d.date)).y0(d => newYPrecipScale(d.precipLower)).y1(d => newYPrecipScale(d.precipUpper)));
+                }
+
+                // Update lines
+                if (data.some(d => d.temp !== null)) {
+                    svg.select(".temp-line").attr("d", tempLine.x(d => newXScale(d.date)).y(d => newYTempScale(d.temp)));
+                }
+                if (data.some(d => d.precip !== null)) {
+                    svg.select(".precip-line").attr("d", precipLine.x(d => newXScale(d.date)).y(d => newYPrecipScale(d.precip)));
+                }
+                if (data.some(d => d.humidity !== null)) {
+                    svg.select(".humidity-line").attr("d", humidityLine.x(d => newXScale(d.date)).y(d => newYPrecipScale(d.humidity)));
+                }
+
+                // Update points
+                if (data.some(d => d.temp !== null)) {
+                    svg.selectAll(".temp-point")
+                        .attr("cx", d => newXScale(d.date))
+                        .attr("cy", d => newYTempScale(d.temp));
+                }
+                if (data.some(d => d.precip !== null)) {
+                    svg.selectAll(".precip-point")
+                        .attr("cx", d => newXScale(d.date))
+                        .attr("cy", d => newYPrecipScale(d.precip));
+                }
+                if (data.some(d => d.humidity !== null)) {
+                    svg.selectAll(".humidity-point")
+                        .attr("cx", d => newXScale(d.date))
+                        .attr("cy", d => newYPrecipScale(d.humidity));
+                }
+            });
+
+        svg.call(zoom);
+
+        // Add touch gesture hints for mobile
+        if ('ontouchstart' in window) {
+            const touchHint = svg.append("text")
+                .attr("class", "touch-hint")
+                .attr("x", width / 2)
+                .attr("y", height - 10)
+                .attr("text-anchor", "middle")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "10px")
+                .style("opacity", 0.6)
+                .text("Pinch to zoom • Drag to pan");
+
+            // Hide hint after first interaction
+            svg.on("touchstart.zoom", () => {
+                touchHint.transition().duration(500).style("opacity", 0).remove();
+            });
+        }
+
         // Store chart instance for theme updates
         if (!this.d3Charts) this.d3Charts = {};
-        this.d3Charts[containerId] = { svg, data, xScale, yTempScale, yPrecipScale };
+        this.d3Charts[containerId] = { svg, data, xScale, yTempScale, yPrecipScale, zoom };
     }
 
     displaySearchBoundingPolygon(boundingbox, displayName, searchTerm) {

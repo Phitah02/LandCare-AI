@@ -280,8 +280,22 @@
                                     </div>
                                 </div>
                                 <div class="chart-container">
-                                    <div id="historical-ndvi-chart" style="width: 400px; height: 200px;" aria-label="Historical Vegetation Indices Chart"></div>
-                                    <div id="historical-weather-chart" style="width: 400px; height: 200px;" aria-label="Historical Weather Data Chart"></div>
+                                    <div class="chart-with-controls">
+                                        <div class="chart-controls">
+                                            <button class="export-btn export-png" data-chart="historical-ndvi-chart" title="Export as PNG">📷 PNG</button>
+                                            <button class="export-btn export-svg" data-chart="historical-ndvi-chart" title="Export as SVG">📊 SVG</button>
+                                            <button class="export-btn export-csv" data-chart="historical-ndvi-chart" title="Export as CSV">📄 CSV</button>
+                                        </div>
+                                        <div id="historical-ndvi-chart" style="width: 400px; height: 200px;" aria-label="Historical Vegetation Indices Chart"></div>
+                                    </div>
+                                    <div class="chart-with-controls">
+                                        <div class="chart-controls">
+                                            <button class="export-btn export-png" data-chart="historical-weather-chart" title="Export as PNG">📷 PNG</button>
+                                            <button class="export-btn export-svg" data-chart="historical-weather-chart" title="Export as SVG">📊 SVG</button>
+                                            <button class="export-btn export-csv" data-chart="historical-weather-chart" title="Export as CSV">📄 CSV</button>
+                                        </div>
+                                        <div id="historical-weather-chart" style="width: 400px; height: 200px;" aria-label="Historical Weather Data Chart"></div>
+                                    </div>
                                 </div>
                                 <div class="historical-stats">
                                     <div class="stat-card">
@@ -330,8 +344,22 @@
                                     </div>
                                 </div>
                                 <div class="chart-container">
-                                    <div id="forecast-ndvi-chart" style="width: 400px; height: 200px;" aria-label="Forecasted Vegetation Indices Chart"></div>
-                                    <div id="forecast-weather-chart" style="width: 400px; height: 200px;" aria-label="Forecasted Weather Data Chart"></div>
+                                    <div class="chart-with-controls">
+                                        <div class="chart-controls">
+                                            <button class="export-btn export-png" data-chart="forecast-ndvi-chart" title="Export as PNG">📷 PNG</button>
+                                            <button class="export-btn export-svg" data-chart="forecast-ndvi-chart" title="Export as SVG">📊 SVG</button>
+                                            <button class="export-btn export-csv" data-chart="forecast-ndvi-chart" title="Export as CSV">📄 CSV</button>
+                                        </div>
+                                        <div id="forecast-ndvi-chart" style="width: 400px; height: 200px;" aria-label="Forecasted Vegetation Indices Chart"></div>
+                                    </div>
+                                    <div class="chart-with-controls">
+                                        <div class="chart-controls">
+                                            <button class="export-btn export-png" data-chart="forecast-weather-chart" title="Export as PNG">📷 PNG</button>
+                                            <button class="export-btn export-svg" data-chart="forecast-weather-chart" title="Export as SVG">📊 SVG</button>
+                                            <button class="export-btn export-csv" data-chart="forecast-weather-chart" title="Export as CSV">📄 CSV</button>
+                                        </div>
+                                        <div id="forecast-weather-chart" style="width: 400px; height: 200px;" aria-label="Forecasted Weather Data Chart"></div>
+                                    </div>
                                 </div>
                                 <div class="forecast-info">
                                     <div class="stat-card">
@@ -421,7 +449,12 @@
                     <article class="chart-item">
                         <h3>Predicted Vegetation Health (5 Years)</h3>
                         <p>How green will our future be? This chart shows projected changes in vegetation density.</p>
-                        <div id="futureVegetationChart" style="width: 400px; height: 200px;" aria-label="Predicted Vegetation Health Chart for 5 Years"></div>
+                        <div class="chart-controls">
+                            <button class="export-btn export-png" data-chart="futureVegetationChart" title="Export as PNG">📷 PNG</button>
+                            <button class="export-btn export-svg" data-chart="futureVegetationChart" title="Export as SVG">📊 SVG</button>
+                            <button class="export-btn export-csv" data-chart="futureVegetationChart" title="Export as CSV">📄 CSV</button>
+                        </div>
+                        <div id="futureVegetationChart" aria-label="Predicted Vegetation Health Chart for 5 Years"></div>
                         <p class="chart-info">
                             <i class="fas fa-info-circle" aria-hidden="true"></i>
                             Projection based on current trends and climate models.
@@ -430,7 +463,12 @@
                     <article class="chart-item">
                         <h3>Future Soil Erosion Risk (Scenario A)</h3>
                         <p>Understanding potential erosion helps us implement preventative measures.</p>
-                        <div id="futureErosionChart" style="width: 400px; height: 200px;" aria-label="Future Soil Erosion Risk Chart Scenario A"></div>
+                        <div class="chart-controls">
+                            <button class="export-btn export-png" data-chart="futureErosionChart" title="Export as PNG">📷 PNG</button>
+                            <button class="export-btn export-svg" data-chart="futureErosionChart" title="Export as SVG">📊 SVG</button>
+                            <button class="export-btn export-csv" data-chart="futureErosionChart" title="Export as CSV">📄 CSV</button>
+                        </div>
+                        <div id="futureErosionChart" aria-label="Future Soil Erosion Risk Chart Scenario A"></div>
                         <p class="chart-info">
                             <i class="fas fa-info-circle" aria-hidden="true"></i>
                             Scenario A: Moderate rainfall increase with minimal human intervention.
