@@ -10,6 +10,7 @@ import bcrypt
 from functools import wraps
 import pandas as pd
 import numpy as np
+from flask import make_response
 
 class Database:
     def __init__(self):
@@ -489,7 +490,7 @@ def token_required(f):
 
         # Allow OPTIONS requests to pass through (for CORS preflight)
         if request.method == 'OPTIONS':
-            return '', 200
+            return make_response('', 200)
 
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
