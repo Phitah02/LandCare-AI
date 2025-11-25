@@ -1225,6 +1225,14 @@ class LandCareApp {
                 this.loadHistoricalWeather();
             });
         }
+
+        // Attach event listeners for period selection buttons
+        const periodButtons = document.querySelectorAll('.period-btn');
+        periodButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                this.selectWeatherPeriod(button.id);
+            });
+        });
     }
 
     attachForecastingButtons() {
@@ -1959,6 +1967,56 @@ class LandCareApp {
         }
     }
 
+    selectWeatherPeriod(buttonId) {
+        // Remove active class from all period buttons
+        const periodButtons = document.querySelectorAll('.period-btn');
+        periodButtons.forEach(btn => btn.classList.remove('active'));
+
+        // Add active class to clicked button
+        const clickedButton = document.getElementById(buttonId);
+        if (clickedButton) {
+            clickedButton.classList.add('active');
+        }
+
+        // Calculate dates based on selected period
+        const today = new Date();
+        let startDate, endDate;
+
+        switch (buttonId) {
+            case 'period-7':
+                startDate = new Date(today);
+                startDate.setDate(today.getDate() - 7);
+                endDate = new Date(today);
+                break;
+            case 'period-30':
+                startDate = new Date(today);
+                startDate.setDate(today.getDate() - 30);
+                endDate = new Date(today);
+                break;
+            case 'period-90':
+                startDate = new Date(today);
+                startDate.setDate(today.getDate() - 90);
+                endDate = new Date(today);
+                break;
+            case 'period-365':
+                startDate = new Date(today);
+                startDate.setDate(today.getDate() - 365);
+                endDate = new Date(today);
+                break;
+            default:
+                return;
+        }
+
+        // Update date picker inputs
+        const startInput = document.getElementById('historical-weather-start');
+        const endInput = document.getElementById('historical-weather-end');
+
+        if (startInput && endInput) {
+            startInput.value = startDate.toISOString().split('T')[0];
+            endInput.value = endDate.toISOString().split('T')[0];
+        }
+    }
+
     async loadHistoricalWeather() {
         if (!this.authToken) {
             this.showError('You must be logged in to access historical data');
@@ -1978,6 +2036,17 @@ class LandCareApp {
 
             if (!startDate || !endDate) {
                 this.showError('Please select both start and end dates');
+                return;
+            }
+
+            // Validate date range doesn't exceed 365 days
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            const diffTime = Math.abs(end - start);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays > 365) {
+                this.showError('Date range cannot exceed 365 days. Please select a shorter period.');
                 return;
             }
 

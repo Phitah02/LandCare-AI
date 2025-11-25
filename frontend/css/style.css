@@ -696,6 +696,43 @@ button:disabled {
     box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
 }
 
+/* Period Selection Buttons */
+.period-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.period-btn {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color);
+    background: var(--panel-bg);
+    color: var(--text-color);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.period-btn:hover {
+    background: var(--bg-color);
+    border-color: var(--button-bg);
+    color: var(--button-bg);
+}
+
+.period-btn.active {
+    background: var(--button-bg);
+    color: white;
+    border-color: var(--button-bg);
+}
+
+.period-btn:focus {
+    outline: 2px solid var(--button-bg);
+    outline-offset: 2px;
+}
+
 .chart-container {
     margin: 20px 0;
 }
