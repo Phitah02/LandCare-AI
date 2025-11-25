@@ -793,20 +793,17 @@ button:disabled {
     margin: 0 auto;
 }
 
-/* Desktop fixed dimensions */
+/* Desktop responsive dimensions */
 @media (min-width: 1025px) {
     .chart-container {
         width: 1083px;
-        height: 498px;
         padding: 0;
     }
 
     .chart-container canvas,
     .chart-container svg {
-        width: 1083px;
-        height: 498px;
-        min-height: 498px;
-        max-height: 498px;
+        min-height: 350px;
+        max-height: 500px;
     }
 }
 

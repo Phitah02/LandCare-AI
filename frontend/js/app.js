@@ -2851,10 +2851,12 @@ class LandCareApp {
         const width = isMobile ? Math.min(container.node().getBoundingClientRect().width - margin.left - margin.right, 1083 - margin.left - margin.right) : 1083 - margin.left - margin.right;
         const height = isMobile ? Math.min(498 - margin.top - margin.bottom, 300) : 498 - margin.top - margin.bottom;
 
-        // Create SVG
+        // Create SVG with viewBox for responsive scaling
         const svg = container.append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
+            .attr("width", "100%")
+            .attr("height", "100%")
+            .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+            .attr("preserveAspectRatio", "xMidYMid meet")
             .append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -3042,23 +3044,20 @@ class LandCareApp {
                 .attr("stroke-width", 1);
         }
 
-        // Add precipitation line and points
-        svg.append("path")
-            .datum(processedData)
-            .attr("fill", "none")
-            .attr("stroke", themeColors.blue)
-            .attr("stroke-width", 2)
-            .attr("d", precipLine);
+        // Add precipitation bars
+        const barWidth = Math.max(2, Math.min(20, width / processedData.length * 0.8)); // Adaptive bar width
 
-        svg.selectAll(".precip-point")
+        svg.selectAll(".precip-bar")
             .data(processedData)
-            .enter().append("circle")
-            .attr("class", "precip-point")
-            .attr("cx", d => xScale(d.date))
-            .attr("cy", d => yPrecipScale(d.precipitation))
-            .attr("r", 3)
+            .enter().append("rect")
+            .attr("class", "precip-bar")
+            .attr("x", d => xScale(d.date) - barWidth / 2)
+            .attr("y", d => yPrecipScale(d.precipitation))
+            .attr("width", barWidth)
+            .attr("height", d => height - yPrecipScale(d.precipitation))
             .attr("fill", themeColors.blue)
-            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("opacity", 0.7)
+            .attr("stroke", themeColors.blue)
             .attr("stroke-width", 1);
 
         // Add legend
@@ -3182,8 +3181,7 @@ class LandCareApp {
                     svg.selectAll(".humidity-point").attr("cx", d => newXScale(d.date)).attr("cy", d => newYHumidityScale(d.humidity));
                 }
 
-                svg.selectAll(".precip-line").attr("d", precipLine.x(d => newXScale(d.date)).y(d => newYPrecipScale(d.precipitation)));
-                svg.selectAll(".precip-point").attr("cx", d => newXScale(d.date)).attr("cy", d => newYPrecipScale(d.precipitation));
+                // Precipitation is represented only by bars, no lines to update
             });
 
         svg.call(zoom);
