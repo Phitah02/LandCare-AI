@@ -3882,13 +3882,39 @@ class LandCareApp {
         const yTempAxis = d3.axisLeft(yTempScale);
         const yPrecipAxis = d3.axisRight(yPrecipScale);
 
+        // Add gridlines first (behind everything else)
+        svg.append("g")
+            .attr("class", "grid")
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(xScale)
+                .tickSize(-height)
+                .tickFormat("")
+                .ticks(Math.min(data.length, 10)))
+            .selectAll("line")
+            .style("stroke", "#666666")  // Dark gray gridlines
+            .style("stroke-width", 1.5)   // Thicker gridlines
+            .style("opacity", 0.7);
+
+        svg.append("g")
+            .attr("class", "grid")
+            .call(d3.axisLeft(yTempScale)
+                .tickSize(-width)
+                .tickFormat("")
+                .ticks(8))
+            .selectAll("line")
+            .style("stroke", "#666666")  // Dark gray gridlines
+            .style("stroke-width", 1.5)   // Thicker gridlines
+            .style("opacity", 0.7);
+
+        // Add axes on top of gridlines
         svg.append("g")
             .attr("class", "x-axis")
             .attr("transform", `translate(0,${height})`)
             .call(xAxis)
             .selectAll("text")
             .style("fill", themeColors.textColor)
-            .style("font-size", "12px");
+            .style("font-size", "12px")
+            .style("font-family", "Arial, sans-serif");
 
         svg.append("text")
             .attr("transform", `translate(${width/2}, ${height + margin.bottom - 10})`)
@@ -3896,14 +3922,16 @@ class LandCareApp {
             .style("fill", themeColors.textColor)
             .style("font-size", "12px")
             .style("font-weight", "bold")
-            .text("Date");
+            .style("font-family", "Arial, sans-serif")
+            .text("Time (hours/days)");
 
         svg.append("g")
             .attr("class", "y-axis-left")
             .call(yTempAxis)
             .selectAll("text")
             .style("fill", themeColors.textColor)
-            .style("font-size", "12px");
+            .style("font-size", "12px")
+            .style("font-family", "Arial, sans-serif");
 
         svg.append("text")
             .attr("transform", "rotate(-90)")
@@ -3914,7 +3942,8 @@ class LandCareApp {
             .style("fill", themeColors.textColor)
             .style("font-size", "12px")
             .style("font-weight", "bold")
-            .text("Temperature (°C)");
+            .style("font-family", "Arial, sans-serif")
+            .text("Temperature (°F/°C)");
 
         svg.append("g")
             .attr("class", "y-axis-right")
@@ -3922,7 +3951,8 @@ class LandCareApp {
             .call(yPrecipAxis)
             .selectAll("text")
             .style("fill", themeColors.textColor)
-            .style("font-size", "12px");
+            .style("font-size", "12px")
+            .style("font-family", "Arial, sans-serif");
 
         svg.append("text")
             .attr("transform", "rotate(90)")
@@ -4298,8 +4328,8 @@ class LandCareApp {
             svg.append("path")
                 .datum(data.filter(d => d.tempUpper !== null))
                 .attr("class", "temp-area")
-                .attr("fill", themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.2)'))
-                .attr("stroke", themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.4)'))
+                .attr("fill", 'rgba(255, 200, 200, 0.35)')  // Light red shade with 0.35 opacity
+                .attr("stroke", 'rgba(255, 150, 150, 0.5)')  // Semi-transparent red stroke
                 .attr("stroke-width", 1)
                 .attr("d", tempArea);
         }
@@ -4314,8 +4344,8 @@ class LandCareApp {
             svg.append("path")
                 .datum(data.filter(d => d.precipUpper !== null))
                 .attr("class", "precip-area")
-                .attr("fill", themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.2)'))
-                .attr("stroke", themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.4)'))
+                .attr("fill", 'rgba(200, 220, 255, 0.25)')  // Light blue shade with 0.25 opacity for cone of uncertainty
+                .attr("stroke", 'rgba(150, 180, 255, 0.4)')  // Semi-transparent blue stroke
                 .attr("stroke-width", 1)
                 .attr("d", precipArea);
         }
@@ -4346,7 +4376,7 @@ class LandCareApp {
                 .attr("class", "temp-line")
                 .attr("fill", "none")
                 .attr("stroke", themeColors.red)
-                .attr("stroke-width", 2)
+                .attr("stroke-width", 3)  // Increased to 3px for bolder appearance
                 .attr("d", tempLine);
         }
 
@@ -4356,7 +4386,7 @@ class LandCareApp {
                 .attr("class", "precip-line")
                 .attr("fill", "none")
                 .attr("stroke", themeColors.blue)
-                .attr("stroke-width", 2)
+                .attr("stroke-width", 3)  // Increased to 3px for bolder appearance
                 .attr("d", precipLine);
         }
 
@@ -4366,7 +4396,7 @@ class LandCareApp {
                 .attr("class", "humidity-line")
                 .attr("fill", "none")
                 .attr("stroke", themeColors.cyan)
-                .attr("stroke-width", 2)
+                .attr("stroke-width", 3)  // Increased to 3px for bolder appearance
                 .attr("stroke-dasharray", "5,5")
                 .attr("d", humidityLine);
         }
@@ -4379,10 +4409,10 @@ class LandCareApp {
                 .attr("class", "temp-point")
                 .attr("cx", d => xScale(d.date))
                 .attr("cy", d => yTempScale(d.temp))
-                .attr("r", 3)
+                .attr("r", 4)  // Increased to 4px radius (8px diameter) for emphasis
                 .attr("fill", themeColors.red)
                 .attr("stroke", isDark ? "#fff" : "#000")
-                .attr("stroke-width", 1);
+                .attr("stroke-width", 2);  // Thicker stroke for better visibility
         }
 
         if (data.some(d => d.precip !== null)) {
@@ -4392,10 +4422,10 @@ class LandCareApp {
                 .attr("class", "precip-point")
                 .attr("cx", d => xScale(d.date))
                 .attr("cy", d => yPrecipScale(d.precip))
-                .attr("r", 3)
+                .attr("r", 4)  // Increased to 4px radius (8px diameter) for emphasis
                 .attr("fill", themeColors.blue)
                 .attr("stroke", isDark ? "#fff" : "#000")
-                .attr("stroke-width", 1);
+                .attr("stroke-width", 2);  // Thicker stroke for better visibility
         }
 
         if (data.some(d => d.humidity !== null)) {
@@ -4405,10 +4435,10 @@ class LandCareApp {
                 .attr("class", "humidity-point")
                 .attr("cx", d => xScale(d.date))
                 .attr("cy", d => yPrecipScale(d.humidity))
-                .attr("r", 3)
+                .attr("r", 4)  // Increased to 4px radius (8px diameter) for emphasis
                 .attr("fill", themeColors.cyan)
                 .attr("stroke", isDark ? "#fff" : "#000")
-                .attr("stroke-width", 1);
+                .attr("stroke-width", 2);  // Thicker stroke for better visibility
         }
 
         // Add axes
@@ -4470,6 +4500,7 @@ class LandCareApp {
             .style("fill", themeColors.textColor)
             .style("font-size", "12px")
             .style("font-weight", "bold")
+            .style("font-family", "Arial, sans-serif")
             .text("Precipitation (mm) / Humidity (%)");
 
         // Add title
@@ -4480,13 +4511,59 @@ class LandCareApp {
             .style("fill", themeColors.textColor)
             .style("font-size", "16px")
             .style("font-weight", "bold")
+            .style("font-family", "Arial, sans-serif")
             .text("Weather Forecast with Uncertainty");
 
-        // Add legend
+        // Add legend in top-right corner
         const legend = svg.append("g")
-            .attr("transform", `translate(${width - 180}, 10)`);
+            .attr("transform", `translate(${width - 200}, 10)`);
 
         let legendY = 0;
+
+        // Add uncertainty bands to legend first
+        if (data.some(d => d.tempUpper !== null)) {
+            legend.append("rect")
+                .attr("x", 0)
+                .attr("y", legendY - 5)
+                .attr("width", 20)
+                .attr("height", 8)
+                .attr("fill", 'rgba(255, 200, 200, 0.35)')
+                .attr("stroke", 'rgba(255, 150, 150, 0.5)')
+                .attr("stroke-width", 1);
+
+            legend.append("text")
+                .attr("x", 25)
+                .attr("y", legendY)
+                .attr("dy", "0.35em")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "11px")
+                .style("font-family", "Arial, sans-serif")
+                .text("Temp Uncertainty");
+
+            legendY += 15;
+        }
+
+        if (data.some(d => d.precipUpper !== null)) {
+            legend.append("rect")
+                .attr("x", 0)
+                .attr("y", legendY - 5)
+                .attr("width", 20)
+                .attr("height", 8)
+                .attr("fill", 'rgba(200, 220, 255, 0.25)')
+                .attr("stroke", 'rgba(150, 180, 255, 0.4)')
+                .attr("stroke-width", 1);
+
+            legend.append("text")
+                .attr("x", 25)
+                .attr("y", legendY)
+                .attr("dy", "0.35em")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "11px")
+                .style("font-family", "Arial, sans-serif")
+                .text("Precip Uncertainty");
+
+            legendY += 15;
+        }
 
         if (data.some(d => d.temp !== null)) {
             legend.append("line")
@@ -4495,22 +4572,23 @@ class LandCareApp {
                 .attr("x2", 20)
                 .attr("y2", legendY)
                 .attr("stroke", themeColors.red)
-                .attr("stroke-width", 2);
+                .attr("stroke-width", 3);
 
             legend.append("circle")
                 .attr("cx", 10)
                 .attr("cy", legendY)
-                .attr("r", 3)
+                .attr("r", 4)
                 .attr("fill", themeColors.red)
                 .attr("stroke", isDark ? "#fff" : "#000")
-                .attr("stroke-width", 1);
+                .attr("stroke-width", 2);
 
             legend.append("text")
                 .attr("x", 25)
                 .attr("y", legendY)
                 .attr("dy", "0.35em")
                 .style("fill", themeColors.textColor)
-                .style("font-size", "12px")
+                .style("font-size", "11px")
+                .style("font-family", "Arial, sans-serif")
                 .text("Temperature");
 
             legendY += 15;
@@ -4523,22 +4601,23 @@ class LandCareApp {
                 .attr("x2", 20)
                 .attr("y2", legendY)
                 .attr("stroke", themeColors.blue)
-                .attr("stroke-width", 2);
+                .attr("stroke-width", 3);
 
             legend.append("circle")
                 .attr("cx", 10)
                 .attr("cy", legendY)
-                .attr("r", 3)
+                .attr("r", 4)
                 .attr("fill", themeColors.blue)
                 .attr("stroke", isDark ? "#fff" : "#000")
-                .attr("stroke-width", 1);
+                .attr("stroke-width", 2);
 
             legend.append("text")
                 .attr("x", 25)
                 .attr("y", legendY)
                 .attr("dy", "0.35em")
                 .style("fill", themeColors.textColor)
-                .style("font-size", "12px")
+                .style("font-size", "11px")
+                .style("font-family", "Arial, sans-serif")
                 .text("Precipitation");
 
             legendY += 15;
@@ -4551,23 +4630,24 @@ class LandCareApp {
                 .attr("x2", 20)
                 .attr("y2", legendY)
                 .attr("stroke", themeColors.cyan)
-                .attr("stroke-width", 2)
+                .attr("stroke-width", 3)
                 .attr("stroke-dasharray", "5,5");
 
             legend.append("circle")
                 .attr("cx", 10)
                 .attr("cy", legendY)
-                .attr("r", 3)
+                .attr("r", 4)
                 .attr("fill", themeColors.cyan)
                 .attr("stroke", isDark ? "#fff" : "#000")
-                .attr("stroke-width", 1);
+                .attr("stroke-width", 2);
 
             legend.append("text")
                 .attr("x", 25)
                 .attr("y", legendY)
                 .attr("dy", "0.35em")
                 .style("fill", themeColors.textColor)
-                .style("font-size", "12px")
+                .style("font-size", "11px")
+                .style("font-family", "Arial, sans-serif")
                 .text("Humidity");
         }
 
