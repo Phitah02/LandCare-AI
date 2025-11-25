@@ -305,8 +305,13 @@ def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
         # Return mock data on error
         dates = []
         values = []
-        current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
-        end_dt = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+        try:
+            current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError:
+            # Use default dates if parsing fails
+            current = datetime.datetime(1984, 1, 1)
+            end_dt = datetime.datetime.now()
         while current <= end_dt:
             dates.append(current.strftime('%Y-%m-%d'))
             values.append(0.5 + 0.3 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
@@ -441,8 +446,13 @@ def get_historical_evi(geometry, start_date='1984-01-01', end_date=None):
         # Return mock data on error
         dates = []
         values = []
-        current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
-        end_dt = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+        try:
+            current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError:
+            # Use default dates if parsing fails
+            current = datetime.datetime(1984, 1, 1)
+            end_dt = datetime.datetime.now()
         while current <= end_dt:
             dates.append(current.strftime('%Y-%m-%d'))
             values.append(0.35 + 0.25 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.08))
@@ -576,8 +586,13 @@ def get_historical_savi(geometry, start_date='1984-01-01', end_date=None, L=0.5)
         # Return mock data on error
         dates = []
         values = []
-        current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
-        end_dt = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+        try:
+            current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError:
+            # Use default dates if parsing fails
+            current = datetime.datetime(1984, 1, 1)
+            end_dt = datetime.datetime.now()
         while current <= end_dt:
             dates.append(current.strftime('%Y-%m-%d'))
             values.append(0.45 + 0.35 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
@@ -1066,8 +1081,14 @@ def get_historical_vis(geometry, start_date='1984-01-01', end_date=None):
         ndvi_values = []
         evi_values = []
         savi_values = []
-        current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
-        end = datetime.datetime.strptime(end_date or datetime.datetime.now().strftime('%Y-%m-%d'), '%Y-%m-%d')
+        try:
+            current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+            end_str = end_date or datetime.datetime.now().strftime('%Y-%m-%d')
+            end = datetime.datetime.strptime(end_str, '%Y-%m-%d')
+        except ValueError:
+            # Use default dates if parsing fails
+            current = datetime.datetime(1984, 1, 1)
+            end = datetime.datetime.now()
         while current <= end:
             dates.append(current.strftime('%Y-%m-15'))
             ndvi_values.append(0.5 + 0.3 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
