@@ -443,15 +443,11 @@ def historical_savi():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['OPTIONS', 'GET'])
-def historical_weather_endpoint(lat, lon):
-    """Handle historical weather requests with CORS preflight."""
-    if request.method == 'OPTIONS':
-        return '', 200
-    return _historical_weather_with_token(lat, lon)
 
+
+@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['GET'])
 @token_required
-def _historical_weather_with_token(lat, lon):
+def historical_weather(lat, lon):
     """Get historical weather data for coordinates with caching."""
     try:
         # Check if using date range or days
@@ -581,17 +577,11 @@ def _historical_weather_with_token(lat, lon):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/forecast/vis', methods=['OPTIONS', 'POST'])
-def forecast_vis_endpoint():
-    """Forecast Vegetation Indices (NDVI, EVI, SAVI) using historical data with SARIMA model."""
-    if request.method == 'OPTIONS':
-        return '', 200
 
-    # For POST requests, apply token_required
-    return _forecast_vis_with_token()
 
+@app.route('/forecast/vis', methods=['POST'])
 @token_required
-def _forecast_vis_with_token():
+def forecast_vis():
     try:
         data = request.get_json()
         historical_ndvi = data.get('historical_ndvi')
@@ -687,17 +677,11 @@ async def run_ndvi_forecast_async(task_id, geometry, months, user_id):
             'end_time': time.time()
         }
 
-@app.route('/forecast/weather/<float:lat>/<float:lon>', methods=['OPTIONS', 'GET'])
-def forecast_weather_endpoint(lat, lon):
-    """Forecast weather for coordinates synchronously with uncertainty bands."""
-    if request.method == 'OPTIONS':
-        return '', 200
 
-    # For GET requests, apply token_required
-    return _forecast_weather_with_token(lat, lon)
 
+@app.route('/forecast/weather/<float:lat>/<float:lon>', methods=['GET'])
 @token_required
-def _forecast_weather_with_token(lat, lon):
+def forecast_weather_route(lat, lon):
     try:
         days = int(request.args.get('days', 5))  # Default to 5 days, max 16
         user_id = request.user_id
