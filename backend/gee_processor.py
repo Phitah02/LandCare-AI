@@ -232,9 +232,18 @@ def get_savi(geometry, L=0.5):
             'note': 'Mock data due to error'
         }
 
-def get_historical_ndvi(geometry, years=10):
-    """Get historical NDVI data for the past N years with monthly averages using parallel processing."""
+def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
+    """Get historical NDVI data using Landsat 8-Day VI Composite Collection."""
     try:
+        if end_date is None:
+            end_date = datetime.datetime.now().strftime('%Y-%m-%d')
+
+        # Validate dates
+        start = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+        end = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+        if start.year < 1984 or end > datetime.datetime.now():
+            raise ValueError("Date range must be between 1984 and present")
+
         # Check if GEE is properly initialized
         try:
             test_geometry = ee.Geometry.Point([0, 0])
@@ -246,10 +255,11 @@ def get_historical_ndvi(geometry, years=10):
             # Return mock historical data
             dates = []
             values = []
-            for year in range(2023 - years + 1, 2024):
-                for month in range(1, 13):
-                    dates.append(f"{year}-{month:02d}-15")
-                    values.append(0.5 + 0.3 * np.sin(month * np.pi / 6) + np.random.normal(0, 0.1))
+            current = start
+            while current <= end:
+                dates.append(current.strftime('%Y-%m-%d'))
+                values.append(0.5 + 0.3 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+                current += datetime.timedelta(days=8)  # 8-day intervals
             return {
                 'dates': dates,
                 'ndvi_values': values,
@@ -258,74 +268,33 @@ def get_historical_ndvi(geometry, years=10):
 
         roi = ee.Geometry.Polygon(geometry['coordinates'])
 
-        # Calculate start and end dates
-        end_date = datetime.datetime.now()
-        start_date = end_date - datetime.timedelta(days=365 * years)
-
-        # Get Sentinel-2 collection
-        collection = ee.ImageCollection('COPERNICUS/S2_SR') \
+        # Get Landsat 8-Day NDVI Composite Collection
+        collection = ee.ImageCollection('LANDSAT/LC8_L1T_8DAY_NDVI') \
             .filterBounds(roi) \
-            .filterDate(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')) \
-            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
-            .select(['B4', 'B8'])
+            .filterDate(start_date, end_date)
 
-        # Create a list of year-month combinations
-        year_months = []
-        current = start_date
-        while current <= end_date:
-            year_months.append(f"{current.year}-{current.month:02d}")
-            if current.month == 12:
-                current = current.replace(year=current.year + 1, month=1)
-            else:
-                current = current.replace(month=current.month + 1)
+        # Get all images and extract dates and values
+        def extract_ndvi(image):
+            date = image.date().format('YYYY-MM-dd')
+            ndvi = image.reduceRegion(
+                reducer=ee.Reducer.mean(),
+                geometry=roi,
+                scale=30,
+                maxPixels=1e9
+            ).get('NDVI')
+            return ee.Feature(None, {'date': date, 'ndvi': ndvi})
 
-        # Define a function to calculate NDVI for each month (to be mapped over)
-        def calculate_monthly_ndvi(ym_str):
-            year, month = ym_str.split('-')
-            year = ee.Number.parse(year)
-            month = ee.Number.parse(month)
-
-            start = ee.Date.fromYMD(year, month, 1)
-            end = ee.Date.fromYMD(
-                ee.Algorithms.If(month.eq(12), year.add(1), year),
-                ee.Algorithms.If(month.eq(12), 1, month.add(1)),
-                1
-            )
-
-            monthly_collection = collection.filterDate(start, end)
-            monthly_size = monthly_collection.size()
-
-            # Calculate mean NDVI for the month
-            def compute_ndvi():
-                monthly_ndvi = monthly_collection.mean().normalizedDifference(['B8', 'B4'])
-                mean_ndvi = monthly_ndvi.reduceRegion(
-                    reducer=ee.Reducer.mean(),
-                    geometry=roi,
-                    scale=10,
-                    maxPixels=1e9
-                )
-                return mean_ndvi.get('nd')
-
-            # Return null if no images, otherwise compute NDVI
-            return ee.Algorithms.If(monthly_size.gt(0), compute_ndvi(), None)
-
-        # Create an ee.List of year-month strings
-        ym_list = ee.List(year_months)
-
-        # Map the function over the list in parallel
-        ndvi_results = ym_list.map(calculate_monthly_ndvi)
-
-        # Get the results as a list
-        results_list = ndvi_results.getInfo()
+        features = collection.map(extract_ndvi)
+        results = features.getInfo()
 
         # Process results
         dates = []
         values = []
-        for i, ym in enumerate(year_months):
-            ndvi_val = results_list[i]
-            if ndvi_val is not None:
-                dates.append(f"{ym}-15")  # Mid-month date
-                values.append(ndvi_val)
+        for feature in results['features']:
+            props = feature['properties']
+            if props['ndvi'] is not None:
+                dates.append(props['date'])
+                values.append(props['ndvi'])
 
         return {
             'dates': dates,
@@ -336,10 +305,12 @@ def get_historical_ndvi(geometry, years=10):
         # Return mock data on error
         dates = []
         values = []
-        for year in range(2023 - years + 1, 2024):
-            for month in range(1, 13):
-                dates.append(f"{year}-{month:02d}-15")
-                values.append(0.5 + 0.3 * np.sin(month * np.pi / 6) + np.random.normal(0, 0.1))
+        current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+        end_dt = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+        while current <= end_dt:
+            dates.append(current.strftime('%Y-%m-%d'))
+            values.append(0.5 + 0.3 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+            current += datetime.timedelta(days=8)
         return {
             'dates': dates,
             'ndvi_values': values,
@@ -347,9 +318,18 @@ def get_historical_ndvi(geometry, years=10):
             'note': 'Mock data due to error'
         }
 
-def get_historical_evi(geometry, years=10):
-    """Get historical EVI data for the past N years with monthly averages using parallel processing."""
+def get_historical_evi(geometry, start_date='1984-01-01', end_date=None):
+    """Get historical EVI data using Landsat Level 2 with monthly averages."""
     try:
+        if end_date is None:
+            end_date = datetime.datetime.now().strftime('%Y-%m-%d')
+
+        # Validate dates
+        start = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+        end = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+        if start.year < 1984 or end > datetime.datetime.now():
+            raise ValueError("Date range must be between 1984 and present")
+
         # Check if GEE is properly initialized
         try:
             test_geometry = ee.Geometry.Point([0, 0])
@@ -361,10 +341,11 @@ def get_historical_evi(geometry, years=10):
             # Return mock historical data
             dates = []
             values = []
-            for year in range(2023 - years + 1, 2024):
-                for month in range(1, 13):
-                    dates.append(f"{year}-{month:02d}-15")
-                    values.append(0.35 + 0.25 * np.sin(month * np.pi / 6) + np.random.normal(0, 0.08))
+            current = start
+            while current <= end:
+                dates.append(current.strftime('%Y-%m-%d'))
+                values.append(0.35 + 0.25 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.08))
+                current += datetime.timedelta(days=30)  # Monthly intervals
             return {
                 'dates': dates,
                 'evi_values': values,
@@ -373,28 +354,24 @@ def get_historical_evi(geometry, years=10):
 
         roi = ee.Geometry.Polygon(geometry['coordinates'])
 
-        # Calculate start and end dates
-        end_date = datetime.datetime.now()
-        start_date = end_date - datetime.timedelta(days=365 * years)
-
-        # Get Sentinel-2 collection
-        collection = ee.ImageCollection('COPERNICUS/S2_SR') \
+        # Get Landsat Level 2 collection
+        collection = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2') \
             .filterBounds(roi) \
-            .filterDate(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')) \
-            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
-            .select(['B2', 'B4', 'B8'])
+            .filterDate(start_date, end_date) \
+            .filter(ee.Filter.lt('CLOUD_COVER', 20)) \
+            .select(['SR_B2', 'SR_B4', 'SR_B5'])  # Blue, Red, NIR
 
         # Create a list of year-month combinations
         year_months = []
-        current = start_date
-        while current <= end_date:
+        current = start
+        while current <= end:
             year_months.append(f"{current.year}-{current.month:02d}")
             if current.month == 12:
                 current = current.replace(year=current.year + 1, month=1)
             else:
                 current = current.replace(month=current.month + 1)
 
-        # Define a function to calculate EVI for each month (to be mapped over)
+        # Define a function to calculate EVI for each month
         def calculate_monthly_evi(ym_str):
             year, month = ym_str.split('-')
             year = ee.Number.parse(year)
@@ -413,9 +390,9 @@ def get_historical_evi(geometry, years=10):
             # Calculate mean EVI for the month
             def compute_evi():
                 monthly_image = monthly_collection.mean()
-                nir = monthly_image.select('B8')
-                red = monthly_image.select('B4')
-                blue = monthly_image.select('B2')
+                nir = monthly_image.select('SR_B5')
+                red = monthly_image.select('SR_B4')
+                blue = monthly_image.select('SR_B2')
 
                 monthly_evi = monthly_image.expression(
                     '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))',
@@ -429,7 +406,7 @@ def get_historical_evi(geometry, years=10):
                 mean_evi = monthly_evi.reduceRegion(
                     reducer=ee.Reducer.mean(),
                     geometry=roi,
-                    scale=10,
+                    scale=30,
                     maxPixels=1e9
                 )
                 return mean_evi.get('constant')
@@ -440,7 +417,7 @@ def get_historical_evi(geometry, years=10):
         # Create an ee.List of year-month strings
         ym_list = ee.List(year_months)
 
-        # Map the function over the list in parallel
+        # Map the function over the list
         evi_results = ym_list.map(calculate_monthly_evi)
 
         # Get the results as a list
@@ -464,10 +441,12 @@ def get_historical_evi(geometry, years=10):
         # Return mock data on error
         dates = []
         values = []
-        for year in range(2023 - years + 1, 2024):
-            for month in range(1, 13):
-                dates.append(f"{year}-{month:02d}-15")
-                values.append(0.35 + 0.25 * np.sin(month * np.pi / 6) + np.random.normal(0, 0.08))
+        current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+        end_dt = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+        while current <= end_dt:
+            dates.append(current.strftime('%Y-%m-%d'))
+            values.append(0.35 + 0.25 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.08))
+            current += datetime.timedelta(days=30)
         return {
             'dates': dates,
             'evi_values': values,
@@ -475,9 +454,18 @@ def get_historical_evi(geometry, years=10):
             'note': 'Mock data due to error'
         }
 
-def get_historical_savi(geometry, years=10, L=0.5):
-    """Get historical SAVI data for the past N years with monthly averages using parallel processing."""
+def get_historical_savi(geometry, start_date='1984-01-01', end_date=None, L=0.5):
+    """Get historical SAVI data using Landsat Level 2 with monthly averages."""
     try:
+        if end_date is None:
+            end_date = datetime.datetime.now().strftime('%Y-%m-%d')
+
+        # Validate dates
+        start = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+        end = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+        if start.year < 1984 or end > datetime.datetime.now():
+            raise ValueError("Date range must be between 1984 and present")
+
         # Check if GEE is properly initialized
         try:
             test_geometry = ee.Geometry.Point([0, 0])
@@ -489,10 +477,11 @@ def get_historical_savi(geometry, years=10, L=0.5):
             # Return mock historical data
             dates = []
             values = []
-            for year in range(2023 - years + 1, 2024):
-                for month in range(1, 13):
-                    dates.append(f"{year}-{month:02d}-15")
-                    values.append(0.45 + 0.35 * np.sin(month * np.pi / 6) + np.random.normal(0, 0.1))
+            current = start
+            while current <= end:
+                dates.append(current.strftime('%Y-%m-%d'))
+                values.append(0.45 + 0.35 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+                current += datetime.timedelta(days=30)  # Monthly intervals
             return {
                 'dates': dates,
                 'savi_values': values,
@@ -501,28 +490,24 @@ def get_historical_savi(geometry, years=10, L=0.5):
 
         roi = ee.Geometry.Polygon(geometry['coordinates'])
 
-        # Calculate start and end dates
-        end_date = datetime.datetime.now()
-        start_date = end_date - datetime.timedelta(days=365 * years)
-
-        # Get Sentinel-2 collection
-        collection = ee.ImageCollection('COPERNICUS/S2_SR') \
+        # Get Landsat Level 2 collection
+        collection = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2') \
             .filterBounds(roi) \
-            .filterDate(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')) \
-            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
-            .select(['B4', 'B8'])
+            .filterDate(start_date, end_date) \
+            .filter(ee.Filter.lt('CLOUD_COVER', 20)) \
+            .select(['SR_B4', 'SR_B5'])  # Red, NIR
 
         # Create a list of year-month combinations
         year_months = []
-        current = start_date
-        while current <= end_date:
+        current = start
+        while current <= end:
             year_months.append(f"{current.year}-{current.month:02d}")
             if current.month == 12:
                 current = current.replace(year=current.year + 1, month=1)
             else:
                 current = current.replace(month=current.month + 1)
 
-        # Define a function to calculate SAVI for each month (to be mapped over)
+        # Define a function to calculate SAVI for each month
         def calculate_monthly_savi(ym_str):
             year, month = ym_str.split('-')
             year = ee.Number.parse(year)
@@ -541,8 +526,8 @@ def get_historical_savi(geometry, years=10, L=0.5):
             # Calculate mean SAVI for the month
             def compute_savi():
                 monthly_image = monthly_collection.mean()
-                nir = monthly_image.select('B8')
-                red = monthly_image.select('B4')
+                nir = monthly_image.select('SR_B5')
+                red = monthly_image.select('SR_B4')
 
                 monthly_savi = monthly_image.expression(
                     '((NIR - RED) / (NIR + RED + L)) * (1 + L)',
@@ -556,7 +541,7 @@ def get_historical_savi(geometry, years=10, L=0.5):
                 mean_savi = monthly_savi.reduceRegion(
                     reducer=ee.Reducer.mean(),
                     geometry=roi,
-                    scale=10,
+                    scale=30,
                     maxPixels=1e9
                 )
                 return mean_savi.get('constant')
@@ -567,7 +552,7 @@ def get_historical_savi(geometry, years=10, L=0.5):
         # Create an ee.List of year-month strings
         ym_list = ee.List(year_months)
 
-        # Map the function over the list in parallel
+        # Map the function over the list
         savi_results = ym_list.map(calculate_monthly_savi)
 
         # Get the results as a list
@@ -591,10 +576,12 @@ def get_historical_savi(geometry, years=10, L=0.5):
         # Return mock data on error
         dates = []
         values = []
-        for year in range(2023 - years + 1, 2024):
-            for month in range(1, 13):
-                dates.append(f"{year}-{month:02d}-15")
-                values.append(0.45 + 0.35 * np.sin(month * np.pi / 6) + np.random.normal(0, 0.1))
+        current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+        end_dt = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+        while current <= end_dt:
+            dates.append(current.strftime('%Y-%m-%d'))
+            values.append(0.45 + 0.35 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+            current += datetime.timedelta(days=30)
         return {
             'dates': dates,
             'savi_values': values,
@@ -888,10 +875,196 @@ def calculate_risk_score(ndvi_data, land_cover_data, slope_data, weather_data, e
             'note': 'Risk calculation failed, using default values'
         }
 
+def get_historical_vis(geometry, start_date='1984-01-01', end_date=None):
+    """Get historical NDVI, EVI, SAVI data for the specified date range."""
+    try:
+        # Check if GEE is properly initialized
+        try:
+            test_geometry = ee.Geometry.Point([0, 0])
+            gee_initialized = True
+        except:
+            gee_initialized = False
+
+        if not gee_initialized:
+            # Return mock historical data
+            dates = []
+            ndvi_values = []
+            evi_values = []
+            savi_values = []
+            current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+            end = datetime.datetime.strptime(end_date or datetime.datetime.now().strftime('%Y-%m-%d'), '%Y-%m-%d')
+            while current <= end:
+                dates.append(current.strftime('%Y-%m-15'))
+                ndvi_values.append(0.5 + 0.3 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+                evi_values.append(0.35 + 0.25 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.08))
+                savi_values.append(0.45 + 0.35 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+                current = current.replace(month=current.month + 1)
+                if current.month == 1:
+                    current = current.replace(year=current.year + 1, month=1)
+            return {
+                'dates': dates,
+                'ndvi_values': ndvi_values,
+                'evi_values': evi_values,
+                'savi_values': savi_values,
+                'note': 'Mock data - GEE not initialized'
+            }
+
+        roi = ee.Geometry.Polygon(geometry['coordinates'])
+
+        # Validate dates
+        start = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+        end = datetime.datetime.strptime(end_date or datetime.datetime.now().strftime('%Y-%m-%d'), '%Y-%m-%d')
+        if start.year < 1984 or end > datetime.datetime.now():
+            raise ValueError("Date range must be between 1984 and present")
+
+        # Get NDVI from 8-day composite
+        ndvi_collection = ee.ImageCollection('LANDSAT/LC8_L1T_8DAY_NDVI') \
+            .filterBounds(roi) \
+            .filterDate(start_date, end_date)
+
+        # Get Landsat Level 2 for EVI and SAVI
+        landsat_collection = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2') \
+            .filterBounds(roi) \
+            .filterDate(start_date, end_date) \
+            .filter(ee.Filter.lt('CLOUD_COVER', 20)) \
+            .select(['SR_B2', 'SR_B4', 'SR_B5'])
+
+        # Create list of months
+        year_months = []
+        current = start
+        while current <= end:
+            year_months.append(f"{current.year}-{current.month:02d}")
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
+
+        def calculate_monthly_vis(ym_str):
+            year, month = ym_str.split('-')
+            year = ee.Number.parse(year)
+            month = ee.Number.parse(month)
+
+            start_month = ee.Date.fromYMD(year, month, 1)
+            end_month = ee.Date.fromYMD(
+                ee.Algorithms.If(month.eq(12), year.add(1), year),
+                ee.Algorithms.If(month.eq(12), 1, month.add(1)),
+                1
+            )
+
+            # NDVI from composite
+            monthly_ndvi_coll = ndvi_collection.filterDate(start_month, end_month)
+            ndvi_size = monthly_ndvi_coll.size()
+            def compute_ndvi():
+                monthly_ndvi = monthly_ndvi_coll.mean()
+                mean_ndvi = monthly_ndvi.reduceRegion(
+                    reducer=ee.Reducer.mean(),
+                    geometry=roi,
+                    scale=30,
+                    maxPixels=1e9
+                )
+                return mean_ndvi.get('ndvi')
+
+            # EVI and SAVI from Landsat
+            monthly_landsat = landsat_collection.filterDate(start_month, end_month)
+            landsat_size = monthly_landsat.size()
+            def compute_evi_savi():
+                monthly_image = monthly_landsat.mean()
+                nir = monthly_image.select('SR_B5')
+                red = monthly_image.select('SR_B4')
+                blue = monthly_image.select('SR_B2')
+
+                # EVI
+                evi = monthly_image.expression(
+                    '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))',
+                    {'NIR': nir, 'RED': red, 'BLUE': blue}
+                )
+                mean_evi = evi.reduceRegion(
+                    reducer=ee.Reducer.mean(),
+                    geometry=roi,
+                    scale=30,
+                    maxPixels=1e9
+                )
+
+                # SAVI
+                savi = monthly_image.expression(
+                    '((NIR - RED) / (NIR + RED + 0.5)) * 1.5',
+                    {'NIR': nir, 'RED': red}
+                )
+                mean_savi = savi.reduceRegion(
+                    reducer=ee.Reducer.mean(),
+                    geometry=roi,
+                    scale=30,
+                    maxPixels=1e9
+                )
+
+                return ee.Dictionary({
+                    'evi': mean_evi.get('constant'),
+                    'savi': mean_savi.get('constant')
+                })
+
+            # Return results
+            ndvi_result = ee.Algorithms.If(ndvi_size.gt(0), compute_ndvi(), None)
+            evi_savi_result = ee.Algorithms.If(landsat_size.gt(0), compute_evi_savi(), ee.Dictionary({'evi': None, 'savi': None}))
+
+            return ee.Dictionary({
+                'ndvi': ndvi_result,
+                'evi': evi_savi_result.get('evi'),
+                'savi': evi_savi_result.get('savi')
+            })
+
+        ym_list = ee.List(year_months)
+        vis_results = ym_list.map(calculate_monthly_vis)
+        results_list = vis_results.getInfo()
+
+        # Process results
+        dates = []
+        ndvi_values = []
+        evi_values = []
+        savi_values = []
+        for i, ym in enumerate(year_months):
+            result = results_list[i]
+            if result:
+                dates.append(f"{ym}-15")
+                ndvi_values.append(result.get('ndvi'))
+                evi_values.append(result.get('evi'))
+                savi_values.append(result.get('savi'))
+
+        return {
+            'dates': dates,
+            'ndvi_values': ndvi_values,
+            'evi_values': evi_values,
+            'savi_values': savi_values
+        }
+
+    except Exception as e:
+        # Return mock data on error
+        dates = []
+        ndvi_values = []
+        evi_values = []
+        savi_values = []
+        current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+        end = datetime.datetime.strptime(end_date or datetime.datetime.now().strftime('%Y-%m-%d'), '%Y-%m-%d')
+        while current <= end:
+            dates.append(current.strftime('%Y-%m-15'))
+            ndvi_values.append(0.5 + 0.3 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+            evi_values.append(0.35 + 0.25 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.08))
+            savi_values.append(0.45 + 0.35 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+            current = current.replace(month=current.month + 1)
+            if current.month == 1:
+                current = current.replace(year=current.year + 1, month=1)
+        return {
+            'dates': dates,
+            'ndvi_values': ndvi_values,
+            'evi_values': evi_values,
+            'savi_values': savi_values,
+            'error': str(e),
+            'note': 'Mock data due to error'
+        }
+
 def get_risk_recommendations(risk_score, risk_level):
     """Generate recommendations based on risk assessment."""
     recommendations = []
-    
+
     if risk_level in ['Very High', 'High']:
         recommendations.extend([
             "Immediate intervention required",
@@ -911,5 +1084,5 @@ def get_risk_recommendations(risk_score, risk_level):
             "Regular monitoring recommended",
             "Maintain soil health"
         ])
-    
+
     return recommendations

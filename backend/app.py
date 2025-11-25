@@ -2,7 +2,7 @@ import asyncio
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from config.config import Config
-from gee_processor import initialize_gee, get_ndvi, get_evi, get_savi, get_land_cover, get_slope_data, calculate_risk_score, get_historical_ndvi, get_historical_evi, get_historical_savi
+from gee_processor import initialize_gee, get_ndvi, get_evi, get_savi, get_land_cover, get_slope_data, calculate_risk_score, get_historical_ndvi, get_historical_evi, get_historical_savi, get_historical_vis
 import math
 from weather_integration import get_weather_data, get_weather_forecast, get_historical_weather
 from forecasting import forecast_ndvi, forecast_weather
@@ -256,23 +256,34 @@ def geocode():
 @app.route('/historical/vis', methods=['POST'])
 @token_required
 def historical_vis():
-    """Get historical NDVI data for a geometry with caching."""
+    """Get historical NDVI, EVI, SAVI data for a geometry with caching."""
     try:
         data = request.get_json()
         geometry = data.get('geometry')
-        months = data.get('months', 12)  # Default to 12 months, max 12
+        start_date = data.get('start_date', '1984-01-01')
+        end_date = data.get('end_date')
         user_id = request.user_id
 
         if not geometry:
             return jsonify({'error': 'No geometry provided'}), 400
 
-        if months > 12:
-            return jsonify({'error': 'Maximum 12 months allowed'}), 400
+        # Validate dates
+        try:
+            start = datetime.strptime(start_date, '%Y-%m-%d')
+            if end_date:
+                end = datetime.strptime(end_date, '%Y-%m-%d')
+            else:
+                end = datetime.now()
+            if start.year < 1984 or end > datetime.now():
+                return jsonify({'error': 'Date range must be between 1984 and present'}), 400
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
 
         # Check cache first
         geometry_hash = db.generate_geometry_hash(geometry)
-        cache_key_suffix = f"_{months}m"
-        cached_data = db.get_cached_historical_data('ndvi', geometry_hash + cache_key_suffix, years=2)  # Use years instead of months
+        date_range_key = f"{start_date}_{end_date or 'present'}"
+        cache_key = f"{geometry_hash}_{date_range_key}"
+        cached_data = db.get_cached_historical_data('vis', cache_key, years=1)
 
         if cached_data:
             # Return cached data
@@ -284,65 +295,56 @@ def historical_vis():
                     'source': 'Google Earth Engine',
                     'timestamp': cached_data['created_at'],
                     'spatial_extent': geometry,
-                    'period_months': months
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'data_points': len(cached_data['data'].get('dates', []))
                 }
             })
 
-        # Compute new data - get historical data and filter to last N months
-        historical_data = get_historical_ndvi(geometry, years=2)  # Get 2 years to ensure we have enough data
+        # Compute new data
+        historical_data = get_historical_vis(geometry, start_date, end_date)
 
-        if 'dates' in historical_data and 'ndvi_values' in historical_data:
-            # Sort by date and get the most recent N months
-            date_value_pairs = list(zip(historical_data['dates'], historical_data['ndvi_values']))
-            date_value_pairs.sort(key=lambda x: pd.to_datetime(x[0]), reverse=True)
-
-            # Take the most recent months worth of data
-            filtered_pairs = date_value_pairs[:months * 30]  # Approximate 30 days per month
-
-            # Sort back to chronological order
-            filtered_pairs.sort(key=lambda x: pd.to_datetime(x[0]))
-
-            filtered_dates = [pair[0] for pair in filtered_pairs]
-            filtered_values = [pair[1] for pair in filtered_pairs]
-
-            historical_data = {
-                'dates': filtered_dates,
-                'ndvi_values': filtered_values,
-                'metadata': {
-                    'source': 'Google Earth Engine',
-                    'timestamp': pd.Timestamp.now().isoformat(),
-                    'spatial_extent': geometry,
-                    'period_months': months,
-                    'data_points': len(filtered_dates)
-                }
+        if 'dates' in historical_data:
+            historical_data['metadata'] = {
+                'source': 'Google Earth Engine',
+                'timestamp': pd.Timestamp.now().isoformat(),
+                'spatial_extent': geometry,
+                'start_date': start_date,
+                'end_date': end_date,
+                'data_points': len(historical_data['dates'])
             }
 
-            # Calculate summary statistics
-            if filtered_values:
-                historical_data['statistics'] = {
-                    'mean': round(sum(filtered_values) / len(filtered_values), 4),
-                    'median': round(sorted(filtered_values)[len(filtered_values)//2], 4),
-                    'std_dev': round(pd.Series(filtered_values).std(), 4),
-                    'min': round(min(filtered_values), 4),
-                    'max': round(max(filtered_values), 4),
-                    'trend': 'increasing' if filtered_values[-1] > filtered_values[0] else 'decreasing'
-                }
+            # Calculate summary statistics for each index
+            for index in ['ndvi_values', 'evi_values', 'savi_values']:
+                if index in historical_data and historical_data[index]:
+                    values = [v for v in historical_data[index] if v is not None]
+                    if values:
+                        historical_data[f'{index.split("_")[0]}_statistics'] = {
+                            'mean': round(sum(values) / len(values), 4),
+                            'median': round(sorted(values)[len(values)//2], 4),
+                            'std_dev': round(pd.Series(values).std(), 4),
+                            'min': round(min(values), 4),
+                            'max': round(max(values), 4),
+                            'trend': 'increasing' if values[-1] > values[0] else 'decreasing'
+                        }
         else:
             historical_data = {
-                'error': 'Failed to retrieve historical NDVI data',
+                'error': 'Failed to retrieve historical VI data',
                 'dates': [],
-                'ndvi_values': []
+                'ndvi_values': [],
+                'evi_values': [],
+                'savi_values': []
             }
 
         # Save to cache
         try:
-            db.save_cached_historical_data('ndvi', geometry_hash + cache_key_suffix, historical_data, years=2)  # Use years instead of months
+            db.save_cached_historical_data('vis', cache_key, historical_data, years=1)
         except Exception as cache_error:
             print(f"Cache save error: {cache_error}")
 
         # Save to database
         try:
-            db.save_historical_ndvi(user_id, geometry, historical_data)
+            db.save_historical_ndvi(user_id, geometry, historical_data)  # Reuse NDVI table for now
         except Exception as db_error:
             print(f"Database save error: {db_error}")
 
