@@ -486,10 +486,10 @@ def token_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         from flask import request
-        
+
         # Allow OPTIONS requests to pass through (for CORS preflight)
         if request.method == 'OPTIONS':
-            return f(*args, **kwargs)
+            return '', 200
 
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):

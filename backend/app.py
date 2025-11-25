@@ -29,6 +29,18 @@ app.config.from_object(Config)
 # Initialize GEE on startup
 gee_initialized = initialize_gee()
 
+@app.before_request
+def log_cors_request():
+    """Log CORS-related request details for debugging."""
+    if request.method == 'OPTIONS':
+        print(f"CORS Preflight Request: Origin={request.headers.get('Origin')}, "
+              f"Method={request.headers.get('Access-Control-Request-Method')}, "
+              f"Headers={request.headers.get('Access-Control-Request-Headers')}")
+    elif 'Origin' in request.headers:
+        print(f"CORS Request: Origin={request.headers.get('Origin')}, "
+              f"Method={request.method}, "
+              f"Authorization={bool(request.headers.get('Authorization'))}")
+
 # Global task storage for background tasks
 background_tasks = {}
 
