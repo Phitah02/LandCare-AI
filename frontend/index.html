@@ -252,12 +252,10 @@
                                 <h4>Historical Analysis</h4>
                                 <div class="historical-controls">
                                     <div class="control-group">
-                                        <label for="historical-months-select">VIs Period (months):</label>
-                                        <select id="historical-months-select">
-                                            <option value="3">3 months</option>
-                                            <option value="6">6 months</option>
-                                            <option value="12" selected>12 months</option>
-                                        </select>
+                                        <label for="historical-vi-start">Start Date:</label>
+                                        <input type="date" id="historical-vi-start" value="1984-01-01" min="1984-01-01" max="2025-12-31">
+                                        <label for="historical-vi-end">End Date:</label>
+                                        <input type="date" id="historical-vi-end" value="2024-12-31" min="1984-01-01" max="2025-12-31">
                                         <button id="historical-ndvi" class="btn btn-secondary">Load Historical VIs</button>
                                     </div>
                                     <div class="control-group">

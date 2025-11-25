@@ -2261,10 +2261,25 @@ class LandCareApp {
             return;
         }
 
+        const startDate = document.getElementById('historical-vi-start')?.value || '1984-01-01';
+        const endDate = document.getElementById('historical-vi-end')?.value || new Date().toISOString().split('T')[0];
+
+        // Check date range for GEE API limitations
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffTime = Math.abs(end - start);
+        const diffYears = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 365));
+
+        if (diffYears > 10) {
+            const confirmed = confirm(`Warning: You selected a ${diffYears}-year date range. This may exceed Google Earth Engine non-commercial API limits (10,000 CPU-seconds/day) and could result in timeouts or rejections. Consider using a smaller date range. Continue anyway?`);
+            if (!confirmed) {
+                return;
+            }
+        }
+
         try {
             this.updateStatus(this.currentStatus.connection, 'loading_historical', 'Loading historical vegetation data...');
             const geometry = this.mapHandler.currentPolygonLayer.toGeoJSON().geometry;
-            const months = parseInt(document.getElementById('historical-months-select')?.value) || 12; // Get from UI or default to 12
 
             const response = await fetch('https://landcare-ai-1.onrender.com/historical/vis', {
                 method: 'POST',
@@ -2274,14 +2289,15 @@ class LandCareApp {
                 },
                 body: JSON.stringify({
                     geometry: geometry,
-                    months: months
+                    start_date: startDate,
+                    end_date: endDate
                 })
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to load historical NDVI');
+                throw new Error(data.error || 'Failed to load historical VIs');
             }
 
             this.displayHistoricalNDVI(data);
@@ -2289,8 +2305,8 @@ class LandCareApp {
             this.showSuccess('Historical VIs data loaded successfully!');
         } catch (error) {
             this.updateStatus(this.currentStatus.connection, 'idle', 'Failed to load historical data');
-            this.showError(`Historical NDVI error: ${error.message}`);
-            console.error('Historical NDVI error:', error);
+            this.showError(`Historical VIs error: ${error.message}`);
+            console.error('Historical VIs error:', error);
         }
     }
 
@@ -2555,17 +2571,22 @@ class LandCareApp {
 
         // Update statistics
         if (data.metadata) {
-            document.getElementById('historical-data-points').textContent = data.metadata.data_points || data.ndvi_values.length;
-            document.getElementById('historical-time-range').textContent = `${data.metadata.period_months} months`;
-            document.getElementById('historical-trend').textContent = data.metadata.trend || 'N/A';
+            document.getElementById('historical-data-points').textContent = data.metadata.data_points || data.dates.length;
+            document.getElementById('historical-time-range').textContent = `${data.metadata.start_date} to ${data.metadata.end_date}`;
+            document.getElementById('historical-trend').textContent = data.ndvi_statistics?.trend || 'N/A';
         }
 
         // Display statistics if available
-        if (data.statistics) {
-            console.log('NDVI Statistics:', data.statistics);
+        if (data.ndvi_statistics) {
+            console.log('NDVI Statistics:', data.ndvi_statistics);
         }
 
-        this.renderTimeSeriesChart('historical-ndvi-chart', data.dates, data.ndvi_values, 'VIs', 'Historical VIs');
+        // Render multi-series chart for NDVI, EVI, SAVI
+        this.renderMultiTimeSeriesChart('historical-ndvi-chart', data.dates, {
+            'NDVI': data.ndvi_values,
+            'EVI': data.evi_values,
+            'SAVI': data.savi_values
+        }, 'Vegetation Indices', 'Historical Vegetation Indices');
     }
 
     displayHistoricalWeather(data) {
@@ -3521,6 +3542,208 @@ class LandCareApp {
                 tooltip.style("visibility", "hidden");
                 d3.select(this).attr("r", 3);
             });
+
+        // Store chart instance for theme updates
+        if (!this.d3Charts) this.d3Charts = {};
+        this.d3Charts[containerId] = { svg, data, xScale, yScale, zoom };
+    }
+
+    renderMultiTimeSeriesChart(containerId, dates, seriesData, yLabel, title) {
+        const container = d3.select(`#${containerId}`);
+        if (container.empty()) return;
+
+        // Clear any existing chart
+        container.selectAll("*").remove();
+
+        // Get theme colors
+        const themeColors = this.getChartThemeColors();
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+        // Set up margins and dimensions
+        const margin = {top: 20, right: 120, bottom: 60, left: 60};
+        const isMobile = window.innerWidth < 768;
+        const width = isMobile ? Math.min(container.node().getBoundingClientRect().width - margin.left - margin.right, 504 - margin.left - margin.right) : 504 - margin.left - margin.right;
+        const height = isMobile ? Math.min(498 - margin.top - margin.bottom, 300) : 498 - margin.top - margin.bottom;
+
+        // Create SVG
+        const svg = container.append("svg")
+            .attr("width", "100%")
+            .attr("height", "100%")
+            .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+            .attr("preserveAspectRatio", "xMidYMid meet")
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Prepare data
+        const data = dates.map((date, i) => {
+            const point = { date: new Date(date) };
+            Object.keys(seriesData).forEach(key => {
+                point[key] = seriesData[key][i];
+            });
+            return point;
+        });
+
+        // Set up scales
+        const xScale = d3.scaleTime()
+            .domain(d3.extent(data, d => d.date))
+            .range([0, width]);
+
+        const yScale = d3.scaleLinear()
+            .domain([
+                d3.min(data, d => d3.min(Object.keys(seriesData).map(key => d[key]).filter(v => v !== null))),
+                d3.max(data, d => d3.max(Object.keys(seriesData).map(key => d[key]).filter(v => v !== null)))
+            ])
+            .range([height, 0]);
+
+        // Colors for different series
+        const colors = {
+            'NDVI': themeColors.green,
+            'EVI': themeColors.blue,
+            'SAVI': themeColors.orange
+        };
+
+        // Create line generators
+        const lineGenerators = {};
+        Object.keys(seriesData).forEach(key => {
+            lineGenerators[key] = d3.line()
+                .x(d => xScale(d.date))
+                .y(d => yScale(d[key]))
+                .curve(d3.curveMonotoneX)
+                .defined(d => d[key] !== null);
+        });
+
+        // Add lines
+        Object.keys(seriesData).forEach(key => {
+            svg.append("path")
+                .datum(data.filter(d => d[key] !== null))
+                .attr("class", `${key.toLowerCase()}-line`)
+                .attr("fill", "none")
+                .attr("stroke", colors[key])
+                .attr("stroke-width", 2)
+                .attr("d", lineGenerators[key]);
+        });
+
+        // Add points
+        Object.keys(seriesData).forEach(key => {
+            svg.selectAll(`.${key.toLowerCase()}-point`)
+                .data(data.filter(d => d[key] !== null))
+                .enter().append("circle")
+                .attr("class", `${key.toLowerCase()}-point`)
+                .attr("cx", d => xScale(d.date))
+                .attr("cy", d => yScale(d[key]))
+                .attr("r", 3)
+                .attr("fill", colors[key])
+                .attr("stroke", isDark ? "#fff" : "#000")
+                .attr("stroke-width", 1);
+        });
+
+        // Add axes
+        const xAxis = d3.axisBottom(xScale)
+            .ticks(Math.min(data.length, 10))
+            .tickFormat(d3.timeFormat("%b %Y"));
+
+        const yAxis = d3.axisLeft(yScale);
+
+        svg.append("g")
+            .attr("class", "x-axis")
+            .attr("transform", `translate(0,${height})`)
+            .call(xAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", `translate(${width/2}, ${height + margin.bottom - 10})`)
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("Date");
+
+        svg.append("g")
+            .attr("class", "y-axis")
+            .call(yAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", 0 - margin.left)
+            .attr("x", 0 - (height / 2))
+            .attr("dy", "1em")
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text(yLabel);
+
+        // Add title
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", -margin.top / 2)
+            .attr("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "16px")
+            .style("font-weight", "bold")
+            .text(title);
+
+        // Add legend
+        const legend = svg.append("g")
+            .attr("transform", `translate(${width - 100}, 10)`);
+
+        let legendY = 0;
+        Object.keys(seriesData).forEach(key => {
+            legend.append("line")
+                .attr("x1", 0)
+                .attr("y1", legendY)
+                .attr("x2", 20)
+                .attr("y2", legendY)
+                .attr("stroke", colors[key])
+                .attr("stroke-width", 2);
+
+            legend.append("circle")
+                .attr("cx", 10)
+                .attr("cy", legendY)
+                .attr("r", 3)
+                .attr("fill", colors[key])
+                .attr("stroke", isDark ? "#fff" : "#000")
+                .attr("stroke-width", 1);
+
+            legend.append("text")
+                .attr("x", 25)
+                .attr("y", legendY)
+                .attr("dy", "0.35em")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "12px")
+                .text(key);
+
+            legendY += 15;
+        });
+
+        // Add zoom functionality
+        const zoom = d3.zoom()
+            .scaleExtent([1, 10])
+            .translateExtent([[0, 0], [width, height]])
+            .extent([[0, 0], [width, height]])
+            .on("zoom", (event) => {
+                const newXScale = event.transform.rescaleX(xScale);
+                const newYScale = event.transform.rescaleY(yScale);
+
+                // Update axes
+                svg.select(".x-axis").call(d3.axisBottom(newXScale));
+                svg.select(".y-axis").call(d3.axisLeft(newYScale));
+
+                // Update lines
+                Object.keys(seriesData).forEach(key => {
+                    svg.select(`.${key.toLowerCase()}-line`).attr("d", lineGenerators[key].x(d => newXScale(d.date)).y(d => newYScale(d[key])));
+                    svg.selectAll(`.${key.toLowerCase()}-point`)
+                        .attr("cx", d => newXScale(d.date))
+                        .attr("cy", d => newYScale(d[key]));
+                });
+            });
+
+        svg.call(zoom);
 
         // Store chart instance for theme updates
         if (!this.d3Charts) this.d3Charts = {};
