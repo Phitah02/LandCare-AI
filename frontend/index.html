@@ -267,17 +267,21 @@
                                             <button id="period-30" class="period-btn">Last 30 days</button>
                                             <button id="period-90" class="period-btn">Last 90 days</button>
                                             <button id="period-365" class="period-btn">Last 365 days</button>
+                                            <button id="period-1year" class="period-btn">1 Year</button>
+                                            <button id="period-5years" class="period-btn">5 Years</button>
+                                            <button id="period-10years" class="period-btn">10 Years</button>
+                                            <button id="period-custom" class="period-btn">Custom (1940-Present)</button>
                                         </div>
                                         <label for="historical-weather-start">Weather Start Date:</label>
-                                        <input type="date" id="historical-weather-start" value="2024-01-01">
+                                        <input type="date" id="historical-weather-start" value="2024-01-01" min="1940-01-01">
                                         <label for="historical-weather-end">End Date:</label>
-                                        <input type="date" id="historical-weather-end" value="2024-01-31">
+                                        <input type="date" id="historical-weather-end" value="2024-01-31" min="1940-01-01">
                                         <button id="historical-weather" class="btn btn-secondary">Load Historical Weather</button>
                                     </div>
                                 </div>
                                 <div class="chart-container">
-                                    <canvas id="historical-ndvi-chart" width="400" height="200" aria-label="Historical Vegetation Indices Chart"></canvas>
-                                    <canvas id="historical-weather-chart" width="400" height="200" aria-label="Historical Weather Data Chart"></canvas>
+                                    <div id="historical-ndvi-chart" style="width: 400px; height: 200px;" aria-label="Historical Vegetation Indices Chart"></div>
+                                    <div id="historical-weather-chart" style="width: 400px; height: 200px;" aria-label="Historical Weather Data Chart"></div>
                                 </div>
                                 <div class="historical-stats">
                                     <div class="stat-card">
@@ -326,8 +330,8 @@
                                     </div>
                                 </div>
                                 <div class="chart-container">
-                                    <canvas id="forecast-ndvi-chart" width="400" height="200" aria-label="Forecasted Vegetation Indices Chart"></canvas>
-                                    <canvas id="forecast-weather-chart" width="400" height="200" aria-label="Forecasted Weather Data Chart"></canvas>
+                                    <div id="forecast-ndvi-chart" style="width: 400px; height: 200px;" aria-label="Forecasted Vegetation Indices Chart"></div>
+                                    <div id="forecast-weather-chart" style="width: 400px; height: 200px;" aria-label="Forecasted Weather Data Chart"></div>
                                 </div>
                                 <div class="forecast-info">
                                     <div class="stat-card">
@@ -417,7 +421,7 @@
                     <article class="chart-item">
                         <h3>Predicted Vegetation Health (5 Years)</h3>
                         <p>How green will our future be? This chart shows projected changes in vegetation density.</p>
-                        <canvas id="futureVegetationChart" width="400" aria-label="Predicted Vegetation Health Chart for 5 Years"></canvas>
+                        <div id="futureVegetationChart" style="width: 400px; height: 200px;" aria-label="Predicted Vegetation Health Chart for 5 Years"></div>
                         <p class="chart-info">
                             <i class="fas fa-info-circle" aria-hidden="true"></i>
                             Projection based on current trends and climate models.
@@ -426,7 +430,7 @@
                     <article class="chart-item">
                         <h3>Future Soil Erosion Risk (Scenario A)</h3>
                         <p>Understanding potential erosion helps us implement preventative measures.</p>
-                        <canvas id="futureErosionChart" width="400" aria-label="Future Soil Erosion Risk Chart Scenario A"></canvas>
+                        <div id="futureErosionChart" style="width: 400px; height: 200px;" aria-label="Future Soil Erosion Risk Chart Scenario A"></div>
                         <p class="chart-info">
                             <i class="fas fa-info-circle" aria-hidden="true"></i>
                             Scenario A: Moderate rainfall increase with minimal human intervention.
@@ -450,7 +454,6 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="js/map-handler.js"></script>
     <script src="js/app.js"></script>

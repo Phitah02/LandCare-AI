@@ -731,10 +731,10 @@ class LandCareApp {
     }
 
     initFutureCharts() {
-        // Initialize Chart.js if available
-        if (typeof Chart !== 'undefined') {
-            this.chartInstances = {};
-            console.log('Chart.js initialized');
+        // Initialize D3.js charts
+        if (typeof d3 !== 'undefined') {
+            this.d3Charts = this.d3Charts || {};
+            console.log('D3.js initialized for future charts');
 
             // Initialize future charts with realistic mock data after a short delay
             // to ensure DOM elements are fully loaded
@@ -743,7 +743,7 @@ class LandCareApp {
                 this.initFutureErosionChart();
             }, 100);
         } else {
-            console.log('Chart.js not available, charts disabled');
+            console.log('D3.js not available, charts disabled');
         }
     }
 
@@ -842,292 +842,442 @@ class LandCareApp {
     }
 
     renderFutureVegetationChart(years, ndviValues, confidenceUpper, confidenceLower) {
-        if (!this.chartInstances) return;
-
-        const ctx = document.getElementById('futureVegetationChart');
-        if (!ctx) {
-            console.warn('Future vegetation chart canvas not found');
+        const containerId = 'futureVegetationChart';
+        const container = d3.select(`#${containerId}`);
+        if (container.empty()) {
+            console.warn('Future vegetation chart container not found');
             return;
         }
 
-        const themeColors = this.getChartThemeColors();
+        // Clear any existing chart
+        container.selectAll("*").remove();
 
-        this.chartInstances['futureVegetationChart'] = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: years,
-                datasets: [{
-                    label: 'Predicted NDVI',
-                    data: ndviValues,
-                    borderColor: themeColors.green,
-                    backgroundColor: themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                    borderWidth: 3,
-                    fill: false,
-                    tension: 0.3,
-                    pointBackgroundColor: themeColors.green,
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 6,
-                    pointHoverRadius: 8
-                }, {
-                    label: 'Upper Confidence',
-                    data: confidenceUpper,
-                    borderColor: themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.4)'),
-                    backgroundColor: themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.1)'),
-                    borderWidth: 1,
-                    borderDash: [5, 5],
-                    fill: '+1', // Fill to next dataset
-                    tension: 0.3,
-                    pointRadius: 0
-                }, {
-                    label: 'Lower Confidence',
-                    data: confidenceLower,
-                    borderColor: themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.4)'),
-                    backgroundColor: themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.1)'),
-                    borderWidth: 1,
-                    borderDash: [5, 5],
-                    fill: false,
-                    tension: 0.3,
-                    pointRadius: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                aspectRatio: 2, // 2:1 aspect ratio for better mobile display
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Predicted Vegetation Health (5 Years)',
-                        color: themeColors.textColor,
-                        font: {
-                            size: 16,
-                            weight: 'bold'
-                        },
-                        padding: 20
-                    },
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: {
-                            color: themeColors.textColor,
-                            usePointStyle: true,
-                            padding: 15
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.8)',
-                        titleColor: '#fff',
-                        bodyColor: '#fff',
-                        callbacks: {
-                            label: function(context) {
-                                if (context.datasetIndex === 0) {
-                                    return `NDVI: ${context.parsed.y} (${context.label})`;
-                                }
-                                return `${context.dataset.label}: ${context.parsed.y}`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Year',
-                            color: themeColors.textColor,
-                            font: {
-                                weight: 'bold'
-                            }
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    },
-                    y: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'NDVI Value',
-                            color: themeColors.textColor,
-                            font: {
-                                weight: 'bold'
-                            }
-                        },
-                        ticks: {
-                            color: themeColors.textColor,
-                            callback: function(value) {
-                                return value.toFixed(2);
-                            }
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        },
-                        min: 0,
-                        max: 1
-                    }
-                },
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                }
-            }
-        });
+        // Get theme colors
+        const themeColors = this.getChartThemeColors();
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+        // Set up margins and dimensions
+        const margin = {top: 20, right: 80, bottom: 60, left: 60};
+        const containerRect = container.node().getBoundingClientRect();
+        const width = containerRect.width - margin.left - margin.right;
+        const height = 200 - margin.top - margin.bottom;
+
+        // Create SVG
+        const svg = container.append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Prepare data
+        const data = years.map((year, i) => ({
+            year: year,
+            ndvi: parseFloat(ndviValues[i]),
+            upper: parseFloat(confidenceUpper[i]),
+            lower: parseFloat(confidenceLower[i])
+        }));
+
+        // Set up scales
+        const xScale = d3.scaleBand()
+            .domain(years)
+            .range([0, width])
+            .padding(0.1);
+
+        const yScale = d3.scaleLinear()
+            .domain([0, 1])
+            .range([height, 0]);
+
+        // Create line generator
+        const line = d3.line()
+            .x(d => xScale(d.year) + xScale.bandwidth() / 2)
+            .y(d => yScale(d.ndvi))
+            .curve(d3.curveMonotoneX);
+
+        // Create area generator for confidence
+        const area = d3.area()
+            .x(d => xScale(d.year) + xScale.bandwidth() / 2)
+            .y0(d => yScale(d.lower))
+            .y1(d => yScale(d.upper))
+            .curve(d3.curveMonotoneX);
+
+        // Add confidence area
+        svg.append("path")
+            .datum(data)
+            .attr("fill", themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.2)'))
+            .attr("d", area);
+
+        // Add NDVI line
+        svg.append("path")
+            .datum(data)
+            .attr("fill", "none")
+            .attr("stroke", themeColors.green)
+            .attr("stroke-width", 3)
+            .attr("d", line);
+
+        // Add points
+        svg.selectAll(".ndvi-point")
+            .data(data)
+            .enter().append("circle")
+            .attr("class", "ndvi-point")
+            .attr("cx", d => xScale(d.year) + xScale.bandwidth() / 2)
+            .attr("cy", d => yScale(d.ndvi))
+            .attr("r", 6)
+            .attr("fill", themeColors.green)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 2);
+
+        // Add axes
+        const xAxis = d3.axisBottom(xScale);
+        const yAxis = d3.axisLeft(yScale).tickFormat(d3.format(".2f"));
+
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(xAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", `translate(${width/2}, ${height + margin.bottom - 10})`)
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("Year");
+
+        svg.append("g")
+            .call(yAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", 0 - margin.left)
+            .attr("x", 0 - (height / 2))
+            .attr("dy", "1em")
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("NDVI Value");
+
+        // Add title
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", -margin.top / 2)
+            .attr("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "16px")
+            .style("font-weight", "bold")
+            .text("Predicted Vegetation Health (5 Years)");
+
+        // Add legend
+        const legend = svg.append("g")
+            .attr("transform", `translate(${width - 150}, 10)`);
+
+        // Confidence area
+        legend.append("rect")
+            .attr("x", 0)
+            .attr("y", 0)
+            .attr("width", 20)
+            .attr("height", 10)
+            .attr("fill", themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.2)'));
+
+        legend.append("text")
+            .attr("x", 25)
+            .attr("y", 5)
+            .attr("dy", "0.35em")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .text("Confidence Interval");
+
+        // Line
+        legend.append("line")
+            .attr("x1", 0)
+            .attr("y1", 20)
+            .attr("x2", 20)
+            .attr("y2", 20)
+            .attr("stroke", themeColors.green)
+            .attr("stroke-width", 3);
+
+        legend.append("circle")
+            .attr("cx", 10)
+            .attr("cy", 20)
+            .attr("r", 3)
+            .attr("fill", themeColors.green)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        legend.append("text")
+            .attr("x", 25)
+            .attr("y", 20)
+            .attr("dy", "0.35em")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .text("Predicted NDVI");
+
+        // Store chart instance for theme updates
+        if (!this.d3Charts) this.d3Charts = {};
+        this.d3Charts[containerId] = { svg, data, xScale, yScale };
     }
 
     renderFutureErosionChart(years, erosionRisk, vegetationRisk, combinedRisk) {
-        if (!this.chartInstances) return;
-
-        const ctx = document.getElementById('futureErosionChart');
-        if (!ctx) {
-            console.warn('Future erosion chart canvas not found');
+        const containerId = 'futureErosionChart';
+        const container = d3.select(`#${containerId}`);
+        if (container.empty()) {
+            console.warn('Future erosion chart container not found');
             return;
         }
 
-        const themeColors = this.getChartThemeColors();
+        // Clear any existing chart
+        container.selectAll("*").remove();
 
-        this.chartInstances['futureErosionChart'] = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: years,
-                datasets: [{
-                    label: 'Combined Risk',
-                    data: combinedRisk,
-                    borderColor: themeColors.red,
-                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.1)'),
-                    borderWidth: 4,
-                    fill: false,
-                    tension: 0.3,
-                    pointBackgroundColor: themeColors.red,
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 8,
-                    pointHoverRadius: 10
-                }, {
-                    label: 'Soil Erosion Risk',
-                    data: erosionRisk,
-                    borderColor: themeColors.orange,
-                    backgroundColor: themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                    borderWidth: 3,
-                    fill: false,
-                    tension: 0.3,
-                    pointBackgroundColor: themeColors.orange,
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 6,
-                    pointHoverRadius: 8
-                }, {
-                    label: 'Vegetation Degradation Risk',
-                    data: vegetationRisk,
-                    borderColor: themeColors.blue,
-                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                    borderWidth: 3,
-                    fill: false,
-                    tension: 0.3,
-                    pointBackgroundColor: themeColors.blue,
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 6,
-                    pointHoverRadius: 8
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                aspectRatio: 2, // 2:1 aspect ratio for better mobile display
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Future Soil Erosion Risk (Scenario A)',
-                        color: themeColors.textColor,
-                        font: {
-                            size: 16,
-                            weight: 'bold'
-                        },
-                        padding: 20
-                    },
-                    subtitle: {
-                        display: true,
-                        text: 'Scenario A: Moderate rainfall increase with minimal human intervention',
-                        color: themeColors.textColor,
-                        font: {
-                            size: 12,
-                            style: 'italic'
-                        },
-                        padding: {
-                            bottom: 10
-                        }
-                    },
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: {
-                            color: themeColors.textColor,
-                            usePointStyle: true,
-                            padding: 15
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.8)',
-                        titleColor: '#fff',
-                        bodyColor: '#fff',
-                        callbacks: {
-                            label: function(context) {
-                                return `${context.dataset.label}: ${context.parsed.y}% (${context.label})`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Year',
-                            color: themeColors.textColor,
-                            font: {
-                                weight: 'bold'
-                            }
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    },
-                    y: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Risk Level (%)',
-                            color: themeColors.textColor,
-                            font: {
-                                weight: 'bold'
-                            }
-                        },
-                        ticks: {
-                            color: themeColors.textColor,
-                            callback: function(value) {
-                                return value + '%';
-                            }
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        },
-                        min: 0,
-                        max: 100
-                    }
-                },
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                }
-            }
-        });
+        // Get theme colors
+        const themeColors = this.getChartThemeColors();
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+        // Set up margins and dimensions
+        const margin = {top: 20, right: 80, bottom: 80, left: 60};
+        const containerRect = container.node().getBoundingClientRect();
+        const width = containerRect.width - margin.left - margin.right;
+        const height = 200 - margin.top - margin.bottom;
+
+        // Create SVG
+        const svg = container.append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Prepare data
+        const data = years.map((year, i) => ({
+            year: year,
+            combined: parseFloat(combinedRisk[i]),
+            erosion: parseFloat(erosionRisk[i]),
+            vegetation: parseFloat(vegetationRisk[i])
+        }));
+
+        // Set up scales
+        const xScale = d3.scaleBand()
+            .domain(years)
+            .range([0, width])
+            .padding(0.1);
+
+        const yScale = d3.scaleLinear()
+            .domain([0, 100])
+            .range([height, 0]);
+
+        // Create line generators
+        const combinedLine = d3.line()
+            .x(d => xScale(d.year) + xScale.bandwidth() / 2)
+            .y(d => yScale(d.combined))
+            .curve(d3.curveMonotoneX);
+
+        const erosionLine = d3.line()
+            .x(d => xScale(d.year) + xScale.bandwidth() / 2)
+            .y(d => yScale(d.erosion))
+            .curve(d3.curveMonotoneX);
+
+        const vegetationLine = d3.line()
+            .x(d => xScale(d.year) + xScale.bandwidth() / 2)
+            .y(d => yScale(d.vegetation))
+            .curve(d3.curveMonotoneX);
+
+        // Add lines
+        svg.append("path")
+            .datum(data)
+            .attr("fill", "none")
+            .attr("stroke", themeColors.red)
+            .attr("stroke-width", 4)
+            .attr("d", combinedLine);
+
+        svg.append("path")
+            .datum(data)
+            .attr("fill", "none")
+            .attr("stroke", themeColors.orange)
+            .attr("stroke-width", 3)
+            .attr("d", erosionLine);
+
+        svg.append("path")
+            .datum(data)
+            .attr("fill", "none")
+            .attr("stroke", themeColors.blue)
+            .attr("stroke-width", 3)
+            .attr("d", vegetationLine);
+
+        // Add points
+        svg.selectAll(".combined-point")
+            .data(data)
+            .enter().append("circle")
+            .attr("class", "combined-point")
+            .attr("cx", d => xScale(d.year) + xScale.bandwidth() / 2)
+            .attr("cy", d => yScale(d.combined))
+            .attr("r", 6)
+            .attr("fill", themeColors.red)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 2);
+
+        svg.selectAll(".erosion-point")
+            .data(data)
+            .enter().append("circle")
+            .attr("class", "erosion-point")
+            .attr("cx", d => xScale(d.year) + xScale.bandwidth() / 2)
+            .attr("cy", d => yScale(d.erosion))
+            .attr("r", 4)
+            .attr("fill", themeColors.orange)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        svg.selectAll(".vegetation-point")
+            .data(data)
+            .enter().append("circle")
+            .attr("class", "vegetation-point")
+            .attr("cx", d => xScale(d.year) + xScale.bandwidth() / 2)
+            .attr("cy", d => yScale(d.vegetation))
+            .attr("r", 4)
+            .attr("fill", themeColors.blue)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        // Add axes
+        const xAxis = d3.axisBottom(xScale);
+        const yAxis = d3.axisLeft(yScale).tickFormat(d => d + '%');
+
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(xAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", `translate(${width/2}, ${height + margin.bottom - 20})`)
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("Year");
+
+        svg.append("g")
+            .call(yAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", 0 - margin.left)
+            .attr("x", 0 - (height / 2))
+            .attr("dy", "1em")
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("Risk Level (%)");
+
+        // Add title
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", -margin.top / 2)
+            .attr("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "16px")
+            .style("font-weight", "bold")
+            .text("Future Soil Erosion Risk (Scenario A)");
+
+        // Add subtitle
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", -margin.top / 2 + 18)
+            .attr("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-style", "italic")
+            .text("Scenario A: Moderate rainfall increase with minimal human intervention");
+
+        // Add legend
+        const legend = svg.append("g")
+            .attr("transform", `translate(${width - 180}, 10)`);
+
+        // Combined risk
+        legend.append("line")
+            .attr("x1", 0)
+            .attr("y1", 0)
+            .attr("x2", 20)
+            .attr("y2", 0)
+            .attr("stroke", themeColors.red)
+            .attr("stroke-width", 4);
+
+        legend.append("circle")
+            .attr("cx", 10)
+            .attr("cy", 0)
+            .attr("r", 3)
+            .attr("fill", themeColors.red)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        legend.append("text")
+            .attr("x", 25)
+            .attr("y", 0)
+            .attr("dy", "0.35em")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .text("Combined Risk");
+
+        // Soil erosion
+        legend.append("line")
+            .attr("x1", 0)
+            .attr("y1", 15)
+            .attr("x2", 20)
+            .attr("y2", 15)
+            .attr("stroke", themeColors.orange)
+            .attr("stroke-width", 3);
+
+        legend.append("circle")
+            .attr("cx", 10)
+            .attr("cy", 15)
+            .attr("r", 2)
+            .attr("fill", themeColors.orange)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        legend.append("text")
+            .attr("x", 25)
+            .attr("y", 15)
+            .attr("dy", "0.35em")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .text("Soil Erosion Risk");
+
+        // Vegetation degradation
+        legend.append("line")
+            .attr("x1", 0)
+            .attr("y1", 30)
+            .attr("x2", 20)
+            .attr("y2", 30)
+            .attr("stroke", themeColors.blue)
+            .attr("stroke-width", 3);
+
+        legend.append("circle")
+            .attr("cx", 10)
+            .attr("cy", 30)
+            .attr("r", 2)
+            .attr("fill", themeColors.blue)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        legend.append("text")
+            .attr("x", 25)
+            .attr("y", 30)
+            .attr("dy", "0.35em")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .text("Vegetation Degradation Risk");
+
+        // Store chart instance for theme updates
+        if (!this.d3Charts) this.d3Charts = {};
+        this.d3Charts[containerId] = { svg, data, xScale, yScale };
     }
 
     getChartThemeColors() {
@@ -1146,40 +1296,6 @@ class LandCareApp {
     }
 
     updateChartThemes() {
-        // Update existing Chart.js charts with new theme colors
-        if (this.chartInstances) {
-            Object.keys(this.chartInstances).forEach(canvasId => {
-                const chart = this.chartInstances[canvasId];
-                if (chart) {
-                    const themeColors = this.getChartThemeColors();
-                    // Update title color
-                    if (chart.options.plugins && chart.options.plugins.title) {
-                        chart.options.plugins.title.color = themeColors.textColor;
-                    }
-                    // Update subtitle color for future charts
-                    if (chart.options.plugins && chart.options.plugins.subtitle) {
-                        chart.options.plugins.subtitle.color = themeColors.textColor;
-                    }
-                    // Update legend colors
-                    if (chart.options.plugins && chart.options.plugins.legend) {
-                        chart.options.plugins.legend.labels.color = themeColors.textColor;
-                    }
-                    // Update scale colors
-                    if (chart.options.scales) {
-                        Object.keys(chart.options.scales).forEach(scaleKey => {
-                            const scale = chart.options.scales[scaleKey];
-                            if (scale.title) scale.title.color = themeColors.textColor;
-                            if (scale.ticks) scale.ticks.color = themeColors.textColor;
-                            if (scale.grid && scale.grid.color !== undefined) {
-                                scale.grid.color = themeColors.gridColor;
-                            }
-                        });
-                    }
-                    chart.update();
-                }
-            });
-        }
-
         // Update D3.js charts with new theme colors
         if (this.d3Charts) {
             Object.keys(this.d3Charts).forEach(containerId => {
@@ -2003,6 +2119,26 @@ class LandCareApp {
                 startDate.setDate(today.getDate() - 365);
                 endDate = new Date(today);
                 break;
+            case 'period-1year':
+                startDate = new Date(today);
+                startDate.setFullYear(today.getFullYear() - 1);
+                endDate = new Date(today);
+                break;
+            case 'period-5years':
+                startDate = new Date(today);
+                startDate.setFullYear(today.getFullYear() - 5);
+                endDate = new Date(today);
+                break;
+            case 'period-10years':
+                startDate = new Date(today);
+                startDate.setFullYear(today.getFullYear() - 10);
+                endDate = new Date(today);
+                break;
+            case 'period-custom':
+                // For custom, set to a wide range from 1940 to present
+                startDate = new Date('1940-01-01');
+                endDate = new Date(today);
+                break;
             default:
                 return;
         }
@@ -2039,37 +2175,57 @@ class LandCareApp {
                 return;
             }
 
-            // Validate date range doesn't exceed 365 days
+            // Calculate date range for progress feedback
             const start = new Date(startDate);
             const end = new Date(endDate);
             const diffTime = Math.abs(end - start);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const diffYears = Math.ceil(diffDays / 365);
 
-            if (diffDays > 365) {
-                this.showError('Date range cannot exceed 365 days. Please select a shorter period.');
-                return;
-            }
+            // Update status with progress feedback
+            this.updateStatus(this.currentStatus.connection, 'loading_historical',
+                `Loading historical weather data for ${diffYears} year${diffYears > 1 ? 's' : ''}...`);
 
             // Convert to ISO format with time
             const startDateTime = new Date(startDate).toISOString();
             const endDateTime = new Date(endDate).toISOString();
 
+            // Create AbortController for timeout handling
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+
             const response = await fetch(`https://landcare-ai-1.onrender.com/historical/weather/${centroid[0]}/${centroid[1]}?start_date=${startDateTime}&end_date=${endDateTime}`, {
                 headers: {
                     'Authorization': `Bearer ${this.authToken}`
-                }
+                },
+                signal: controller.signal
             });
 
+            clearTimeout(timeoutId);
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to load historical weather');
+                // Handle specific API errors
+                if (response.status === 429) {
+                    throw new Error('API rate limit exceeded. Please try again later.');
+                } else if (response.status === 504 || response.status === 408) {
+                    throw new Error('Request timed out. Please try with a smaller date range.');
+                } else {
+                    throw new Error(data.error || 'Failed to load historical weather');
+                }
             }
 
             this.displayHistoricalWeather(data);
+            this.updateStatus(this.currentStatus.connection, 'idle', 'Historical data loaded successfully');
             this.showSuccess('Historical weather data loaded successfully!');
         } catch (error) {
-            this.showError(`Historical weather error: ${error.message}`);
+            this.updateStatus(this.currentStatus.connection, 'idle', 'Failed to load historical data');
+
+            if (error.name === 'AbortError') {
+                this.showError('Request timed out. Please try with a smaller date range or check your connection.');
+            } else {
+                this.showError(`Historical weather error: ${error.message}`);
+            }
             console.error('Historical weather error:', error);
         }
     }
@@ -2278,172 +2434,125 @@ class LandCareApp {
         });
     }
 
-    renderTimeSeriesChart(canvasId, dates, values, label, title) {
-        if (!this.chartInstances) return;
+    renderTimeSeriesChart(containerId, dates, values, label, title) {
+        const container = d3.select(`#${containerId}`);
+        if (container.empty()) return;
 
-        // Destroy existing chart if it exists
-        if (this.chartInstances[canvasId]) {
-            this.chartInstances[canvasId].destroy();
-        }
+        // Clear any existing chart
+        container.selectAll("*").remove();
 
-        const ctx = document.getElementById(canvasId);
-        if (!ctx) return;
-
+        // Get theme colors
         const themeColors = this.getChartThemeColors();
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
-        this.chartInstances[canvasId] = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: dates,
-                datasets: [{
-                    label: label,
-                    data: values,
-                    borderColor: themeColors.green,
-                    backgroundColor: themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: title,
-                        color: themeColors.textColor
-                    }
-                },
-                scales: {
-                    x: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Date',
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    },
-                    y: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: label,
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    }
-                }
-            }
-        });
+        // Set up margins and dimensions
+        const margin = {top: 20, right: 80, bottom: 60, left: 60};
+        const containerRect = container.node().getBoundingClientRect();
+        const width = containerRect.width - margin.left - margin.right;
+        const height = 200 - margin.top - margin.bottom;
+
+        // Create SVG
+        const svg = container.append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Prepare data
+        const data = dates.map((date, i) => ({
+            date: new Date(date),
+            value: parseFloat(values[i])
+        }));
+
+        // Set up scales
+        const xScale = d3.scaleTime()
+            .domain(d3.extent(data, d => d.date))
+            .range([0, width]);
+
+        const yScale = d3.scaleLinear()
+            .domain([d3.min(data, d => d.value) * 0.95, d3.max(data, d => d.value) * 1.05])
+            .range([height, 0]);
+
+        // Create line generator
+        const line = d3.line()
+            .x(d => xScale(d.date))
+            .y(d => yScale(d.value))
+            .curve(d3.curveMonotoneX);
+
+        // Add line
+        svg.append("path")
+            .datum(data)
+            .attr("fill", "none")
+            .attr("stroke", themeColors.green)
+            .attr("stroke-width", 2)
+            .attr("d", line);
+
+        // Add points
+        svg.selectAll(".point")
+            .data(data)
+            .enter().append("circle")
+            .attr("class", "point")
+            .attr("cx", d => xScale(d.date))
+            .attr("cy", d => yScale(d.value))
+            .attr("r", 3)
+            .attr("fill", themeColors.green)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        // Add axes
+        const xAxis = d3.axisBottom(xScale)
+            .ticks(Math.min(data.length, 10))
+            .tickFormat(d3.timeFormat("%b %Y"));
+
+        const yAxis = d3.axisLeft(yScale);
+
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(xAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", `translate(${width/2}, ${height + margin.bottom - 10})`)
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("Date");
+
+        svg.append("g")
+            .call(yAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", 0 - margin.left)
+            .attr("x", 0 - (height / 2))
+            .attr("dy", "1em")
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text(label);
+
+        // Add title
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", -margin.top / 2)
+            .attr("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "16px")
+            .style("font-weight", "bold")
+            .text(title);
+
+        // Store chart instance for theme updates
+        if (!this.d3Charts) this.d3Charts = {};
+        this.d3Charts[containerId] = { svg, data, xScale, yScale };
     }
 
-    renderDualTimeSeriesChart(canvasId, dates, tempValues, rainValues, tempLabel, rainLabel) {
-        if (!this.chartInstances) return;
-
-        // Destroy existing chart if it exists
-        if (this.chartInstances[canvasId]) {
-            this.chartInstances[canvasId].destroy();
-        }
-
-        const ctx = document.getElementById(canvasId);
-        if (!ctx) return;
-
-        const themeColors = this.getChartThemeColors();
-
-        this.chartInstances[canvasId] = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: dates,
-                datasets: [{
-                    label: tempLabel,
-                    data: tempValues,
-                    borderColor: themeColors.red,
-                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                    yAxisID: 'y',
-                    tension: 0.1
-                }, {
-                    label: rainLabel,
-                    data: rainValues,
-                    borderColor: themeColors.blue,
-                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                    yAxisID: 'y1',
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                stacked: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Historical Weather Data',
-                        color: themeColors.textColor
-                    }
-                },
-                scales: {
-                    x: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Date',
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: {
-                            display: true,
-                            text: tempLabel,
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: {
-                            display: true,
-                            text: rainLabel,
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            drawOnChartArea: false,
-                        }
-                    }
-                }
-            }
-        });
-    }
 
     renderD3HistoricalWeatherChart(containerId, data) {
         // Clear any existing chart
@@ -2489,6 +2598,13 @@ class LandCareApp {
 
         // Remove null/undefined values
         processedData = processedData.filter(d => d.temperature !== null && d.temperature !== undefined);
+
+        // Downsample data for large datasets to maintain performance
+        const MAX_DATA_POINTS = 1000;
+        if (processedData.length > MAX_DATA_POINTS) {
+            const downsampleFactor = Math.ceil(processedData.length / MAX_DATA_POINTS);
+            processedData = processedData.filter((d, i) => i % downsampleFactor === 0);
+        }
 
         // Set up scales
         const xScale = d3.scaleTime()
@@ -2833,494 +2949,698 @@ class LandCareApp {
         this.d3Charts[containerId] = { svg, processedData, xScale, yTempScale, yHumidityScale, yPrecipScale };
     }
 
-    renderTripleTimeSeriesChart(canvasId, dates, tempValues, humidityValues, precipValues, tempLabel, humidityLabel, precipLabel) {
-        if (!this.chartInstances) return;
 
-        // Destroy existing chart if it exists
-        if (this.chartInstances[canvasId]) {
-            this.chartInstances[canvasId].destroy();
+    renderForecastChart(containerId, dates, values, confidenceIntervals, title) {
+        const container = d3.select(`#${containerId}`);
+        if (container.empty()) return;
+
+        // Clear any existing chart
+        container.selectAll("*").remove();
+
+        // Get theme colors
+        const themeColors = this.getChartThemeColors();
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+        // Set up margins and dimensions
+        const margin = {top: 20, right: 80, bottom: 60, left: 60};
+        const containerRect = container.node().getBoundingClientRect();
+        const width = containerRect.width - margin.left - margin.right;
+        const height = 200 - margin.top - margin.bottom;
+
+        // Create SVG
+        const svg = container.append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Prepare data
+        const data = dates.map((date, i) => ({
+            date: new Date(date),
+            value: parseFloat(values[i]),
+            lower: confidenceIntervals && confidenceIntervals.lower ? parseFloat(confidenceIntervals.lower[i]) : null,
+            upper: confidenceIntervals && confidenceIntervals.upper ? parseFloat(confidenceIntervals.upper[i]) : null
+        }));
+
+        // Set up scales
+        const xScale = d3.scaleTime()
+            .domain(d3.extent(data, d => d.date))
+            .range([0, width]);
+
+        const yScale = d3.scaleLinear()
+            .domain([
+                d3.min(data, d => d.lower !== null ? d.lower : d.value) * 0.95,
+                d3.max(data, d => d.upper !== null ? d.upper : d.value) * 1.05
+            ])
+            .range([height, 0]);
+
+        // Create area generator for confidence
+        if (data.some(d => d.lower !== null)) {
+            const area = d3.area()
+                .x(d => xScale(d.date))
+                .y0(d => yScale(d.lower))
+                .y1(d => yScale(d.upper))
+                .curve(d3.curveMonotoneX);
+
+            svg.append("path")
+                .datum(data.filter(d => d.lower !== null))
+                .attr("fill", themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.2)'))
+                .attr("d", area);
         }
 
-        const ctx = document.getElementById(canvasId);
-        if (!ctx) return;
+        // Create line generator
+        const line = d3.line()
+            .x(d => xScale(d.date))
+            .y(d => yScale(d.value))
+            .curve(d3.curveMonotoneX);
 
-        const themeColors = this.getChartThemeColors();
+        // Add line
+        svg.append("path")
+            .datum(data)
+            .attr("fill", "none")
+            .attr("stroke", themeColors.orange)
+            .attr("stroke-width", 2)
+            .attr("d", line);
 
-        this.chartInstances[canvasId] = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: dates,
-                datasets: [{
-                    label: tempLabel,
-                    data: tempValues,
-                    borderColor: themeColors.red,
-                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                    yAxisID: 'y',
-                    tension: 0.1
-                }, {
-                    label: humidityLabel,
-                    data: humidityValues,
-                    borderColor: themeColors.green,
-                    backgroundColor: themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                    yAxisID: 'y1',
-                    tension: 0.1
-                }, {
-                    label: precipLabel,
-                    data: precipValues,
-                    borderColor: themeColors.blue,
-                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                    yAxisID: 'y2',
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                stacked: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Historical Weather Data',
-                        color: themeColors.textColor
-                    }
-                },
-                scales: {
-                    x: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Date',
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: {
-                            display: true,
-                            text: tempLabel,
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: {
-                            display: true,
-                            text: humidityLabel,
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            drawOnChartArea: false,
-                        }
-                    },
-                    y2: {
-                        type: 'linear',
-                        display: false, // Hide precipitation axis to avoid clutter
-                        position: 'right',
-                        title: {
-                            display: true,
-                            text: precipLabel,
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            drawOnChartArea: false,
-                        }
-                    }
-                }
-            }
-        });
+        // Add points
+        svg.selectAll(".point")
+            .data(data)
+            .enter().append("circle")
+            .attr("class", "point")
+            .attr("cx", d => xScale(d.date))
+            .attr("cy", d => yScale(d.value))
+            .attr("r", 3)
+            .attr("fill", themeColors.orange)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        // Add axes
+        const xAxis = d3.axisBottom(xScale)
+            .ticks(Math.min(data.length, 10))
+            .tickFormat(d3.timeFormat("%b %Y"));
+
+        const yAxis = d3.axisLeft(yScale);
+
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(xAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", `translate(${width/2}, ${height + margin.bottom - 10})`)
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("Date");
+
+        svg.append("g")
+            .call(yAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", 0 - margin.left)
+            .attr("x", 0 - (height / 2))
+            .attr("dy", "1em")
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("NDVI");
+
+        // Add title
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", -margin.top / 2)
+            .attr("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "16px")
+            .style("font-weight", "bold")
+            .text(title);
+
+        // Store chart instance for theme updates
+        if (!this.d3Charts) this.d3Charts = {};
+        this.d3Charts[containerId] = { svg, data, xScale, yScale };
     }
 
-    renderForecastChart(canvasId, dates, values, confidenceIntervals, title) {
-        if (!this.chartInstances) return;
+    renderWeatherForecastChart(containerId, dates, tempValues, rainValues) {
+        const container = d3.select(`#${containerId}`);
+        if (container.empty()) return;
 
-        // Destroy existing chart if it exists
-        if (this.chartInstances[canvasId]) {
-            this.chartInstances[canvasId].destroy();
-        }
+        // Clear any existing chart
+        container.selectAll("*").remove();
 
-        const ctx = document.getElementById(canvasId);
-        if (!ctx) return;
-
+        // Get theme colors
         const themeColors = this.getChartThemeColors();
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
-        const datasets = [{
-            label: 'Forecast',
-            data: values,
-            borderColor: themeColors.orange,
-            backgroundColor: themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-            tension: 0.1
-        }];
+        // Set up margins and dimensions
+        const margin = {top: 20, right: 80, bottom: 60, left: 60};
+        const containerRect = container.node().getBoundingClientRect();
+        const width = containerRect.width - margin.left - margin.right;
+        const height = 200 - margin.top - margin.bottom;
 
-        // Add confidence intervals if available
-        if (confidenceIntervals && confidenceIntervals.lower && confidenceIntervals.upper) {
-            datasets.push({
-                label: 'Confidence Lower',
-                data: confidenceIntervals.lower,
-                borderColor: themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.3)'),
-                backgroundColor: themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.1)'),
-                fill: false,
-                tension: 0.1,
-                pointRadius: 0
-            });
-            datasets.push({
-                label: 'Confidence Upper',
-                data: confidenceIntervals.upper,
-                borderColor: themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.3)'),
-                backgroundColor: themeColors.orange.replace('rgb', 'rgba').replace(')', ', 0.1)'),
-                fill: '-1', // Fill to previous dataset
-                tension: 0.1,
-                pointRadius: 0
-            });
-        }
+        // Create SVG
+        const svg = container.append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
 
-        this.chartInstances[canvasId] = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: dates,
-                datasets: datasets
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: title,
-                        color: themeColors.textColor
-                    }
-                },
-                scales: {
-                    x: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Date',
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    },
-                    y: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'NDVI',
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    }
-                }
-            }
-        });
+        // Prepare data
+        const data = dates.map((date, i) => ({
+            date: new Date(date),
+            temperature: parseFloat(tempValues[i]),
+            precipitation: parseFloat(rainValues[i])
+        }));
+
+        // Set up scales
+        const xScale = d3.scaleTime()
+            .domain(d3.extent(data, d => d.date))
+            .range([0, width]);
+
+        const yTempScale = d3.scaleLinear()
+            .domain([
+                d3.min(data, d => d.temperature) - 5,
+                d3.max(data, d => d.temperature) + 5
+            ])
+            .range([height, 0]);
+
+        const yPrecipScale = d3.scaleLinear()
+            .domain([0, d3.max(data, d => d.precipitation) * 1.1])
+            .range([height, 0]);
+
+        // Create line generators
+        const tempLine = d3.line()
+            .x(d => xScale(d.date))
+            .y(d => yTempScale(d.temperature))
+            .curve(d3.curveMonotoneX);
+
+        const precipLine = d3.line()
+            .x(d => xScale(d.date))
+            .y(d => yPrecipScale(d.precipitation))
+            .curve(d3.curveMonotoneX);
+
+        // Add lines
+        svg.append("path")
+            .datum(data)
+            .attr("fill", "none")
+            .attr("stroke", themeColors.red)
+            .attr("stroke-width", 2)
+            .attr("d", tempLine);
+
+        svg.append("path")
+            .datum(data)
+            .attr("fill", "none")
+            .attr("stroke", themeColors.blue)
+            .attr("stroke-width", 2)
+            .attr("d", precipLine);
+
+        // Add points
+        svg.selectAll(".temp-point")
+            .data(data)
+            .enter().append("circle")
+            .attr("class", "temp-point")
+            .attr("cx", d => xScale(d.date))
+            .attr("cy", d => yTempScale(d.temperature))
+            .attr("r", 3)
+            .attr("fill", themeColors.red)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        svg.selectAll(".precip-point")
+            .data(data)
+            .enter().append("circle")
+            .attr("class", "precip-point")
+            .attr("cx", d => xScale(d.date))
+            .attr("cy", d => yPrecipScale(d.precipitation))
+            .attr("r", 3)
+            .attr("fill", themeColors.blue)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        // Add axes
+        const xAxis = d3.axisBottom(xScale)
+            .ticks(Math.min(data.length, 10))
+            .tickFormat(d3.timeFormat("%b %d"));
+
+        const yTempAxis = d3.axisLeft(yTempScale);
+        const yPrecipAxis = d3.axisRight(yPrecipScale);
+
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(xAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", `translate(${width/2}, ${height + margin.bottom - 10})`)
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("Date");
+
+        svg.append("g")
+            .call(yTempAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", 0 - margin.left)
+            .attr("x", 0 - (height / 2))
+            .attr("dy", "1em")
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("Temperature (°C)");
+
+        svg.append("g")
+            .attr("transform", `translate(${width},0)`)
+            .call(yPrecipAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", "rotate(90)")
+            .attr("y", -width - margin.right)
+            .attr("x", 0 - (height / 2))
+            .attr("dy", "1em")
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("Precipitation (mm)");
+
+        // Add title
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", -margin.top / 2)
+            .attr("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "16px")
+            .style("font-weight", "bold")
+            .text("Weather Forecast");
+
+        // Add legend
+        const legend = svg.append("g")
+            .attr("transform", `translate(${width - 150}, 10)`);
+
+        // Temperature
+        legend.append("line")
+            .attr("x1", 0)
+            .attr("y1", 0)
+            .attr("x2", 20)
+            .attr("y2", 0)
+            .attr("stroke", themeColors.red)
+            .attr("stroke-width", 2);
+
+        legend.append("circle")
+            .attr("cx", 10)
+            .attr("cy", 0)
+            .attr("r", 3)
+            .attr("fill", themeColors.red)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        legend.append("text")
+            .attr("x", 25)
+            .attr("y", 0)
+            .attr("dy", "0.35em")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .text("Temperature");
+
+        // Precipitation
+        legend.append("line")
+            .attr("x1", 0)
+            .attr("y1", 20)
+            .attr("x2", 20)
+            .attr("y2", 20)
+            .attr("stroke", themeColors.blue)
+            .attr("stroke-width", 2);
+
+        legend.append("circle")
+            .attr("cx", 10)
+            .attr("cy", 20)
+            .attr("r", 3)
+            .attr("fill", themeColors.blue)
+            .attr("stroke", isDark ? "#fff" : "#000")
+            .attr("stroke-width", 1);
+
+        legend.append("text")
+            .attr("x", 25)
+            .attr("y", 20)
+            .attr("dy", "0.35em")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .text("Precipitation");
+
+        // Store chart instance for theme updates
+        if (!this.d3Charts) this.d3Charts = {};
+        this.d3Charts[containerId] = { svg, data, xScale, yTempScale, yPrecipScale };
     }
 
-    renderWeatherForecastChart(canvasId, dates, tempValues, rainValues) {
-        if (!this.chartInstances) return;
+    renderWeatherForecastChartWithUncertainty(containerId, dates, temperature, precipitation, humidity) {
+        const container = d3.select(`#${containerId}`);
+        if (container.empty()) return;
 
-        // Destroy existing chart if it exists
-        if (this.chartInstances[canvasId]) {
-            this.chartInstances[canvasId].destroy();
-        }
+        // Clear any existing chart
+        container.selectAll("*").remove();
 
-        const ctx = document.getElementById(canvasId);
-        if (!ctx) return;
-
+        // Get theme colors
         const themeColors = this.getChartThemeColors();
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
-        this.chartInstances[canvasId] = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: dates,
-                datasets: [{
-                    label: 'Temperature Forecast (°C)',
-                    data: tempValues,
-                    borderColor: themeColors.red,
-                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                    yAxisID: 'y',
-                    tension: 0.1
-                }, {
-                    label: 'Precipitation Forecast (mm)',
-                    data: rainValues,
-                    borderColor: themeColors.blue,
-                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                    yAxisID: 'y1',
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                stacked: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Weather Forecast',
-                        color: themeColors.textColor
-                    }
-                },
-                scales: {
-                    x: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Date',
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: {
-                            display: true,
-                            text: 'Temperature (°C)',
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: {
-                            display: true,
-                            text: 'Precipitation (mm)',
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            drawOnChartArea: false,
-                        }
-                    }
-                }
-            }
-        });
-    }
+        // Set up margins and dimensions
+        const margin = {top: 20, right: 100, bottom: 60, left: 60};
+        const containerRect = container.node().getBoundingClientRect();
+        const width = containerRect.width - margin.left - margin.right;
+        const height = 200 - margin.top - margin.bottom;
 
-    renderWeatherForecastChartWithUncertainty(canvasId, dates, temperature, precipitation, humidity) {
-        if (!this.chartInstances) return;
+        // Create SVG
+        const svg = container.append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
 
-        // Destroy existing chart if it exists
-        if (this.chartInstances[canvasId]) {
-            this.chartInstances[canvasId].destroy();
+        // Prepare data
+        const data = dates.map((date, i) => ({
+            date: new Date(date),
+            temp: temperature && temperature.values ? parseFloat(temperature.values[i]) : null,
+            tempUpper: temperature && temperature.upper_bound ? parseFloat(temperature.upper_bound[i]) : null,
+            tempLower: temperature && temperature.lower_bound ? parseFloat(temperature.lower_bound[i]) : null,
+            precip: precipitation && precipitation.values ? parseFloat(precipitation.values[i]) : null,
+            precipUpper: precipitation && precipitation.upper_bound ? parseFloat(precipitation.upper_bound[i]) : null,
+            precipLower: precipitation && precipitation.lower_bound ? parseFloat(precipitation.lower_bound[i]) : null,
+            humidity: humidity && humidity.values ? parseFloat(humidity.values[i]) : null
+        }));
+
+        // Set up scales
+        const xScale = d3.scaleTime()
+            .domain(d3.extent(data, d => d.date))
+            .range([0, width]);
+
+        const yTempScale = d3.scaleLinear()
+            .domain([
+                d3.min(data, d => d.tempLower !== null ? d.tempLower : (d.temp !== null ? d.temp - 5 : 0)),
+                d3.max(data, d => d.tempUpper !== null ? d.tempUpper : (d.temp !== null ? d.temp + 5 : 30))
+            ])
+            .range([height, 0]);
+
+        const yPrecipScale = d3.scaleLinear()
+            .domain([
+                0,
+                d3.max(data, d => d.precipUpper !== null ? d.precipUpper : (d.precip !== null ? d.precip * 1.1 : 10))
+            ])
+            .range([height, 0]);
+
+        // Create area generators for uncertainty bands
+        if (data.some(d => d.tempUpper !== null)) {
+            const tempArea = d3.area()
+                .x(d => xScale(d.date))
+                .y0(d => yTempScale(d.tempLower))
+                .y1(d => yTempScale(d.tempUpper))
+                .curve(d3.curveMonotoneX);
+
+            svg.append("path")
+                .datum(data.filter(d => d.tempUpper !== null))
+                .attr("fill", themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.1)'))
+                .attr("d", tempArea);
         }
 
-        const ctx = document.getElementById(canvasId);
-        if (!ctx) return;
+        if (data.some(d => d.precipUpper !== null)) {
+            const precipArea = d3.area()
+                .x(d => xScale(d.date))
+                .y0(d => yPrecipScale(d.precipLower))
+                .y1(d => yPrecipScale(d.precipUpper))
+                .curve(d3.curveMonotoneX);
 
-        const themeColors = this.getChartThemeColors();
-
-        const datasets = [];
-
-        // Temperature with uncertainty
-        if (temperature && temperature.values) {
-            datasets.push({
-                label: 'Temperature (°C)',
-                data: temperature.values,
-                borderColor: themeColors.red,
-                backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                yAxisID: 'y',
-                tension: 0.1
-            });
-
-            // Temperature uncertainty bands
-            if (temperature.upper_bound && temperature.lower_bound) {
-                datasets.push({
-                    label: 'Temp Upper Bound',
-                    data: temperature.upper_bound,
-                    borderColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.4)'),
-                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.05)'),
-                    fill: false,
-                    pointRadius: 0,
-                    tension: 0.1
-                });
-                datasets.push({
-                    label: 'Temp Lower Bound',
-                    data: temperature.lower_bound,
-                    borderColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.4)'),
-                    backgroundColor: themeColors.red.replace('rgb', 'rgba').replace(')', ', 0.05)'),
-                    fill: '-1', // Fill to previous dataset
-                    pointRadius: 0,
-                    tension: 0.1
-                });
-            }
+            svg.append("path")
+                .datum(data.filter(d => d.precipUpper !== null))
+                .attr("fill", themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.1)'))
+                .attr("d", precipArea);
         }
 
-        // Precipitation with uncertainty
-        if (precipitation && precipitation.values) {
-            datasets.push({
-                label: 'Precipitation (mm)',
-                data: precipitation.values,
-                borderColor: themeColors.blue,
-                backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                yAxisID: 'y1',
-                tension: 0.1
-            });
+        // Create line generators
+        const tempLine = d3.line()
+            .x(d => xScale(d.date))
+            .y(d => yTempScale(d.temp))
+            .curve(d3.curveMonotoneX)
+            .defined(d => d.temp !== null);
 
-            // Precipitation uncertainty bands
-            if (precipitation.upper_bound && precipitation.lower_bound) {
-                datasets.push({
-                    label: 'Precip Upper Bound',
-                    data: precipitation.upper_bound,
-                    borderColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.4)'),
-                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.05)'),
-                    fill: false,
-                    pointRadius: 0,
-                    tension: 0.1
-                });
-                datasets.push({
-                    label: 'Precip Lower Bound',
-                    data: precipitation.lower_bound,
-                    borderColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.4)'),
-                    backgroundColor: themeColors.blue.replace('rgb', 'rgba').replace(')', ', 0.05)'),
-                    fill: false,
-                    pointRadius: 0,
-                    tension: 0.1
-                });
-            }
+        const precipLine = d3.line()
+            .x(d => xScale(d.date))
+            .y(d => yPrecipScale(d.precip))
+            .curve(d3.curveMonotoneX)
+            .defined(d => d.precip !== null);
+
+        const humidityLine = d3.line()
+            .x(d => xScale(d.date))
+            .y(d => yPrecipScale(d.humidity)) // Use same scale as precip for simplicity
+            .curve(d3.curveMonotoneX)
+            .defined(d => d.humidity !== null);
+
+        // Add lines
+        if (data.some(d => d.temp !== null)) {
+            svg.append("path")
+                .datum(data.filter(d => d.temp !== null))
+                .attr("fill", "none")
+                .attr("stroke", themeColors.red)
+                .attr("stroke-width", 2)
+                .attr("d", tempLine);
         }
 
-        // Humidity with uncertainty (optional)
-        if (humidity && humidity.values) {
-            datasets.push({
-                label: 'Humidity (%)',
-                data: humidity.values,
-                borderColor: themeColors.green,
-                backgroundColor: themeColors.green.replace('rgb', 'rgba').replace(')', ', 0.2)'),
-                yAxisID: 'y2',
-                tension: 0.1
-            });
+        if (data.some(d => d.precip !== null)) {
+            svg.append("path")
+                .datum(data.filter(d => d.precip !== null))
+                .attr("fill", "none")
+                .attr("stroke", themeColors.blue)
+                .attr("stroke-width", 2)
+                .attr("d", precipLine);
         }
 
-        this.chartInstances[canvasId] = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: dates,
-                datasets: datasets
-            },
-            options: {
-                responsive: true,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                stacked: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Weather Forecast with Uncertainty',
-                        color: themeColors.textColor
-                    }
-                },
-                scales: {
-                    x: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Date',
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: {
-                            display: true,
-                            text: 'Temperature (°C)',
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: {
-                            display: true,
-                            text: 'Precipitation (mm)',
-                            color: themeColors.textColor
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            drawOnChartArea: false,
-                        }
-                    },
-                    y2: {
-                        type: 'linear',
-                        display: false, // Hide humidity axis by default
-                        position: 'right',
-                        title: {
-                            display: true,
-                            text: 'Humidity (%)',
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            drawOnChartArea: false,
-                        }
-                    }
-                }
-            }
-        });
+        if (data.some(d => d.humidity !== null)) {
+            svg.append("path")
+                .datum(data.filter(d => d.humidity !== null))
+                .attr("fill", "none")
+                .attr("stroke", themeColors.green)
+                .attr("stroke-width", 2)
+                .attr("stroke-dasharray", "5,5")
+                .attr("d", humidityLine);
+        }
+
+        // Add points
+        if (data.some(d => d.temp !== null)) {
+            svg.selectAll(".temp-point")
+                .data(data.filter(d => d.temp !== null))
+                .enter().append("circle")
+                .attr("class", "temp-point")
+                .attr("cx", d => xScale(d.date))
+                .attr("cy", d => yTempScale(d.temp))
+                .attr("r", 3)
+                .attr("fill", themeColors.red)
+                .attr("stroke", isDark ? "#fff" : "#000")
+                .attr("stroke-width", 1);
+        }
+
+        if (data.some(d => d.precip !== null)) {
+            svg.selectAll(".precip-point")
+                .data(data.filter(d => d.precip !== null))
+                .enter().append("circle")
+                .attr("class", "precip-point")
+                .attr("cx", d => xScale(d.date))
+                .attr("cy", d => yPrecipScale(d.precip))
+                .attr("r", 3)
+                .attr("fill", themeColors.blue)
+                .attr("stroke", isDark ? "#fff" : "#000")
+                .attr("stroke-width", 1);
+        }
+
+        if (data.some(d => d.humidity !== null)) {
+            svg.selectAll(".humidity-point")
+                .data(data.filter(d => d.humidity !== null))
+                .enter().append("circle")
+                .attr("class", "humidity-point")
+                .attr("cx", d => xScale(d.date))
+                .attr("cy", d => yPrecipScale(d.humidity))
+                .attr("r", 3)
+                .attr("fill", themeColors.green)
+                .attr("stroke", isDark ? "#fff" : "#000")
+                .attr("stroke-width", 1);
+        }
+
+        // Add axes
+        const xAxis = d3.axisBottom(xScale)
+            .ticks(Math.min(data.length, 10))
+            .tickFormat(d3.timeFormat("%b %d"));
+
+        const yTempAxis = d3.axisLeft(yTempScale);
+        const yPrecipAxis = d3.axisRight(yPrecipScale);
+
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(xAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", `translate(${width/2}, ${height + margin.bottom - 10})`)
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("Date");
+
+        svg.append("g")
+            .call(yTempAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", 0 - margin.left)
+            .attr("x", 0 - (height / 2))
+            .attr("dy", "1em")
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("Temperature (°C)");
+
+        svg.append("g")
+            .attr("transform", `translate(${width},0)`)
+            .call(yPrecipAxis)
+            .selectAll("text")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px");
+
+        svg.append("text")
+            .attr("transform", "rotate(90)")
+            .attr("y", -width - margin.right)
+            .attr("x", 0 - (height / 2))
+            .attr("dy", "1em")
+            .style("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "12px")
+            .style("font-weight", "bold")
+            .text("Precipitation (mm) / Humidity (%)");
+
+        // Add title
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", -margin.top / 2)
+            .attr("text-anchor", "middle")
+            .style("fill", themeColors.textColor)
+            .style("font-size", "16px")
+            .style("font-weight", "bold")
+            .text("Weather Forecast with Uncertainty");
+
+        // Add legend
+        const legend = svg.append("g")
+            .attr("transform", `translate(${width - 180}, 10)`);
+
+        let legendY = 0;
+
+        if (data.some(d => d.temp !== null)) {
+            legend.append("line")
+                .attr("x1", 0)
+                .attr("y1", legendY)
+                .attr("x2", 20)
+                .attr("y2", legendY)
+                .attr("stroke", themeColors.red)
+                .attr("stroke-width", 2);
+
+            legend.append("circle")
+                .attr("cx", 10)
+                .attr("cy", legendY)
+                .attr("r", 3)
+                .attr("fill", themeColors.red)
+                .attr("stroke", isDark ? "#fff" : "#000")
+                .attr("stroke-width", 1);
+
+            legend.append("text")
+                .attr("x", 25)
+                .attr("y", legendY)
+                .attr("dy", "0.35em")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "12px")
+                .text("Temperature");
+
+            legendY += 15;
+        }
+
+        if (data.some(d => d.precip !== null)) {
+            legend.append("line")
+                .attr("x1", 0)
+                .attr("y1", legendY)
+                .attr("x2", 20)
+                .attr("y2", legendY)
+                .attr("stroke", themeColors.blue)
+                .attr("stroke-width", 2);
+
+            legend.append("circle")
+                .attr("cx", 10)
+                .attr("cy", legendY)
+                .attr("r", 3)
+                .attr("fill", themeColors.blue)
+                .attr("stroke", isDark ? "#fff" : "#000")
+                .attr("stroke-width", 1);
+
+            legend.append("text")
+                .attr("x", 25)
+                .attr("y", legendY)
+                .attr("dy", "0.35em")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "12px")
+                .text("Precipitation");
+
+            legendY += 15;
+        }
+
+        if (data.some(d => d.humidity !== null)) {
+            legend.append("line")
+                .attr("x1", 0)
+                .attr("y1", legendY)
+                .attr("x2", 20)
+                .attr("y2", legendY)
+                .attr("stroke", themeColors.green)
+                .attr("stroke-width", 2)
+                .attr("stroke-dasharray", "5,5");
+
+            legend.append("circle")
+                .attr("cx", 10)
+                .attr("cy", legendY)
+                .attr("r", 3)
+                .attr("fill", themeColors.green)
+                .attr("stroke", isDark ? "#fff" : "#000")
+                .attr("stroke-width", 1);
+
+            legend.append("text")
+                .attr("x", 25)
+                .attr("y", legendY)
+                .attr("dy", "0.35em")
+                .style("fill", themeColors.textColor)
+                .style("font-size", "12px")
+                .text("Humidity");
+        }
+
+        // Store chart instance for theme updates
+        if (!this.d3Charts) this.d3Charts = {};
+        this.d3Charts[containerId] = { svg, data, xScale, yTempScale, yPrecipScale };
     }
 
     displaySearchBoundingPolygon(boundingbox, displayName, searchTerm) {
