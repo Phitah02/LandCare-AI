@@ -2662,10 +2662,12 @@ class LandCareApp {
         const width = isMobile ? Math.min(container.node().getBoundingClientRect().width - margin.left - margin.right, 504 - margin.left - margin.right) : 504 - margin.left - margin.right;
         const height = isMobile ? Math.min(498 - margin.top - margin.bottom, 300) : 498 - margin.top - margin.bottom;
 
-        // Create SVG
+        // Create SVG with responsive viewBox
         const svg = container.append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
+            .attr("width", "100%")
+            .attr("height", "100%")
+            .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+            .attr("preserveAspectRatio", "xMidYMid meet")
             .append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
