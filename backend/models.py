@@ -490,7 +490,16 @@ def token_required(f):
 
         # Allow OPTIONS requests to pass through (for CORS preflight)
         if request.method == 'OPTIONS':
-            return make_response('', 200)
+            response = make_response('', 200)
+            # Add CORS headers for preflight requests
+            origin = request.headers.get('Origin')
+            if origin:
+                response.headers['Access-Control-Allow-Origin'] = origin
+                response.headers['Access-Control-Allow-Credentials'] = 'true'
+                response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+                response.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+                response.headers['Access-Control-Max-Age'] = '86400'  # 24 hours
+            return response
 
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
