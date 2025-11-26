@@ -203,6 +203,7 @@
                             <button class="tab-button active" data-tab="overview">Statistics</button>
                             <button class="tab-button" data-tab="historical">Historical</button>
                             <button class="tab-button" data-tab="forecasting">Forecasting</button>
+                            <button class="tab-button" data-tab="ml-forecasting">ML Forecast</button>
                             <button class="tab-button" data-tab="risk">Risk Analysis</button>
                         </div>
                         
@@ -371,6 +372,59 @@
                                     <div class="stat-card">
                                         <h4>Confidence Level</h4>
                                         <div class="stat-value" id="forecast-confidence">95%</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="ml-forecasting-tab" class="tab-content">
+                                <h4>ML Forecasting</h4>
+                                <div class="ml-forecasting-controls">
+                                    <div class="control-group">
+                                        <label for="ml-forecast-period-select">Forecast Period (months):</label>
+                                        <select id="ml-forecast-period-select">
+                                            <option value="3">3 months</option>
+                                            <option value="6" selected>6 months</option>
+                                            <option value="12">12 months</option>
+                                        </select>
+                                        <label for="ml-model-select">Model:</label>
+                                        <select id="ml-model-select">
+                                            <option value="ml" selected>ML Model</option>
+                                            <option value="statistical">Statistical Model</option>
+                                            <option value="compare">Compare Both</option>
+                                        </select>
+                                        <button id="ml-forecast-generate" class="btn btn-secondary">Generate Forecast</button>
+                                    </div>
+                                </div>
+                                <div class="chart-container">
+                                    <div class="chart-with-controls">
+                                        <div class="chart-controls">
+                                            <button class="export-btn export-png" data-chart="ml-forecast-chart" title="Export as PNG">📷 PNG</button>
+                                            <button class="export-btn export-svg" data-chart="ml-forecast-chart" title="Export as SVG">📊 SVG</button>
+                                            <button class="export-btn export-csv" data-chart="ml-forecast-chart" title="Export as CSV">📄 CSV</button>
+                                        </div>
+                                        <div id="ml-forecast-chart" aria-label="ML Forecast Time Series Chart"></div>
+                                    </div>
+                                    <div class="chart-with-controls">
+                                        <div class="chart-controls">
+                                            <button class="export-btn export-png" data-chart="ml-feature-importance-chart" title="Export as PNG">📷 PNG</button>
+                                            <button class="export-btn export-svg" data-chart="ml-feature-importance-chart" title="Export as SVG">📊 SVG</button>
+                                            <button class="export-btn export-csv" data-chart="ml-feature-importance-chart" title="Export as CSV">📄 CSV</button>
+                                        </div>
+                                        <div id="ml-feature-importance-chart" aria-label="Feature Importance Bar Chart"></div>
+                                    </div>
+                                </div>
+                                <div class="ml-forecast-info">
+                                    <div class="stat-card">
+                                        <h4>Forecast Period</h4>
+                                        <div class="stat-value" id="ml-forecast-period">6 months</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <h4>Model Type</h4>
+                                        <div class="stat-value" id="ml-model-type">ML Model</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <h4>Confidence Level</h4>
+                                        <div class="stat-value" id="ml-confidence-level">95%</div>
                                     </div>
                                 </div>
                             </div>
