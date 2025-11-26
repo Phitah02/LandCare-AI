@@ -25,8 +25,10 @@ CORS(app, origins=[
     "http://localhost:8080",
     "http://127.0.0.1:8080",
     "https://landcare-ai-frontend.onrender.com",
-    "https://land-care-ai-dl98.vercel.app"
-], methods=['GET', 'POST', 'OPTIONS'], supports_credentials=True, allow_headers=['Authorization', 'Content-Type'])
+    "https://www.landcare-ai-frontend.onrender.com",
+    "https://land-care-ai-dl98.vercel.app",
+    "https://www.land-care-ai-dl98.vercel.app"
+], methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'], supports_credentials=True, allow_headers=['Authorization', 'Content-Type', 'X-Requested-With', 'Accept', 'Accept-Encoding', 'Accept-Language', 'Cache-Control', 'Connection', 'Host', 'Origin', 'Referer', 'User-Agent'])
 app.config.from_object(Config)
 
 # Initialize GEE on startup
@@ -43,6 +45,21 @@ def log_cors_request():
         print(f"CORS Request: Origin={request.headers.get('Origin')}, "
               f"Method={request.method}, "
               f"Authorization={bool(request.headers.get('Authorization'))}")
+
+@app.after_request
+def log_cors_response(response):
+    """Log CORS response headers for debugging."""
+    cors_headers = {}
+    for header_name in response.headers:
+        if header_name.lower().startswith('access-control'):
+            cors_headers[header_name] = response.headers[header_name]
+
+    if cors_headers:
+        print(f"CORS Response Headers: {cors_headers}")
+    elif request.method == 'OPTIONS' or 'Origin' in request.headers:
+        print("WARNING: No CORS headers found in response!")
+
+    return response
 
 # Global task storage for background tasks
 background_tasks = {}
@@ -289,7 +306,7 @@ def historical_vis():
                 end = datetime.strptime(end_date, '%Y-%m-%d')
             else:
                 end = datetime.now()
-            if start.year < 1984 or end > datetime.now():
+            if start.year < 1984 or end.date() > datetime.now().date():
                 return jsonify({'error': 'Date range must be between 1984 and present'}), 400
         except ValueError:
             return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400

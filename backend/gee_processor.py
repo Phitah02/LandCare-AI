@@ -241,7 +241,7 @@ def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
         # Validate dates
         start = datetime.datetime.strptime(start_date, '%Y-%m-%d')
         end = datetime.datetime.strptime(end_date, '%Y-%m-%d')
-        if start.year < 1984 or end > datetime.datetime.now():
+        if start.year < 1984 or end.date() > datetime.datetime.now().date():
             raise ValueError("Date range must be between 1984 and present")
 
         # Check if GEE is properly initialized
@@ -332,7 +332,7 @@ def get_historical_evi(geometry, start_date='1984-01-01', end_date=None):
         # Validate dates
         start = datetime.datetime.strptime(start_date, '%Y-%m-%d')
         end = datetime.datetime.strptime(end_date, '%Y-%m-%d')
-        if start.year < 1984 or end > datetime.datetime.now():
+        if start.year < 1984 or end.date() > datetime.datetime.now().date():
             raise ValueError("Date range must be between 1984 and present")
 
         # Check if GEE is properly initialized
@@ -473,7 +473,7 @@ def get_historical_savi(geometry, start_date='1984-01-01', end_date=None, L=0.5)
         # Validate dates
         start = datetime.datetime.strptime(start_date, '%Y-%m-%d')
         end = datetime.datetime.strptime(end_date, '%Y-%m-%d')
-        if start.year < 1984 or end > datetime.datetime.now():
+        if start.year < 1984 or end.date() > datetime.datetime.now().date():
             raise ValueError("Date range must be between 1984 and present")
 
         # Check if GEE is properly initialized
@@ -935,7 +935,7 @@ def get_historical_vis(geometry, start_date='1984-01-01', end_date=None):
         else:
             end = datetime.datetime.now()
 
-        if start.year < 1984 or end > datetime.datetime.now():
+        if start.year < 1984 or end.date() > datetime.datetime.now().date():
             raise ValueError("Date range must be between 1984 and present")
 
         # Create a list of year-month combinations
