@@ -4976,9 +4976,17 @@ class LandCareApp {
             // For now, use placeholder data. In production, this would call the backend APIs
             const forecastData = this.generatePlaceholderMLForecastData(forecastPeriod, modelType);
 
-            // Render charts
+            // Switch to ML forecasting tab first to make containers visible
+            const mlTabButton = document.querySelector('.tab-button[data-tab="ml-forecasting"]');
+            if (mlTabButton) {
+                mlTabButton.click();
+            }
+
+            // Render charts after tab is visible
+            console.log('ML Forecast: Starting chart rendering');
             this.renderMLForecastChart(forecastData);
             this.renderFeatureImportanceChart(forecastData.featureImportance);
+            console.log('ML Forecast: Chart rendering completed');
 
             // Update info cards
             document.getElementById('ml-forecast-period').textContent = `${forecastPeriod} months`;
