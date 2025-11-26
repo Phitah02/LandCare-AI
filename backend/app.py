@@ -6,6 +6,7 @@ from gee_processor import initialize_gee, get_ndvi, get_evi, get_savi, get_land_
 import math
 from weather_integration import get_weather_data, get_weather_forecast, get_historical_weather
 from forecasting import forecast_ndvi, forecast_weather
+from ndvi_forecast_ml import GEEForecaster
 from models import db, generate_token, token_required
 import json
 import requests
@@ -836,6 +837,492 @@ async def run_weather_forecast_async(task_id, lat, lon, months, user_id):
             'error': str(e),
             'end_time': time.time()
         }
+
+async def run_vegetation_forecast_async(task_id, geometry, periods, user_id, use_fallback=True):
+    """Run vegetation index forecasting in background using GEEForecaster with fallback to statistical models."""
+    try:
+        background_tasks[task_id] = {'status': 'processing', 'start_time': time.time()}
+
+        # Validate periods
+        if not isinstance(periods, list) or not periods:
+            background_tasks[task_id] = {
+                'status': 'failed',
+                'error': 'Periods must be a non-empty list of integers',
+                'end_time': time.time()
+            }
+            return
+
+        # Validate geometry
+        if not geometry or 'coordinates' not in geometry:
+            background_tasks[task_id] = {
+                'status': 'failed',
+                'error': 'Invalid geometry provided',
+                'end_time': time.time()
+            }
+            return
+
+        forecast_result = None
+        method_used = 'ml'
+
+        # Try ML forecasting first
+        try:
+            # Convert geometry to GEE format
+            import ee
+            roi = ee.Geometry.Polygon(geometry['coordinates'])
+
+            # Initialize GEEForecaster
+            # Use last 2 years of data for training
+            end_date = datetime.now().strftime('%Y-%m-%d')
+            start_date = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%d')
+
+            forecaster = GEEForecaster(roi, start_date, end_date)
+
+            # Train models (this may take time)
+            training_result = forecaster.train_models(include_validation=False, include_cv=False)
+            if 'error' in training_result:
+                raise Exception(f"Model training failed: {training_result['error']}")
+
+            # Make forecasts
+            forecast_result = forecaster.forecast(periods)
+            if 'error' in forecast_result:
+                raise Exception(f"ML forecasting failed: {forecast_result['error']}")
+
+        except Exception as ml_error:
+            print(f"ML forecasting failed: {ml_error}")
+            method_used = 'statistical_fallback'
+
+            if not use_fallback:
+                background_tasks[task_id] = {
+                    'status': 'failed',
+                    'error': f"ML forecasting failed and fallback disabled: {str(ml_error)}",
+                    'end_time': time.time()
+                }
+                return
+
+            # Fallback to statistical forecasting
+            try:
+                # Get historical NDVI data
+                historical_data = get_historical_ndvi(geometry, years=2)
+                if 'error' in historical_data or not historical_data.get('dates'):
+                    raise Exception(f"Failed to get historical data for fallback: {historical_data.get('error', 'No data available')}")
+
+                # Prepare data for statistical forecasting
+                historical_ndvi = {
+                    'dates': historical_data['dates'],
+                    'values': historical_data['ndvi_values']
+                }
+
+                # Generate statistical forecast for the maximum period
+                max_periods = max(periods)
+                stat_forecast = forecast_ndvi(historical_ndvi, max_periods)
+
+                if 'error' in stat_forecast:
+                    raise Exception(f"Statistical forecasting fallback failed: {stat_forecast['error']}")
+
+                # Convert to ML-style format for consistency
+                forecast_result = {
+                    'status': 'success',
+                    'forecasts': {},
+                    'model_info': {
+                        'type': 'ARIMA/SARIMA Statistical Model (Fallback)',
+                        'method': 'statistical_fallback',
+                        'reason': str(ml_error),
+                        'original_error': str(ml_error)
+                    }
+                }
+
+                # Create forecast entries for each requested period
+                forecast_dates = stat_forecast.get('forecast_dates', [])
+                forecast_values = stat_forecast.get('forecast_values', [])
+
+                for period in periods:
+                    if period <= len(forecast_values):
+                        forecast_result['forecasts'][f'{period}_months'] = {
+                            'predicted_ndvi': forecast_values[period-1],
+                            'predicted_savi': forecast_values[period-1] * 0.8,  # Approximate conversion
+                            'predicted_evi': forecast_values[period-1] * 0.6,   # Approximate conversion
+                            'period_months': period,
+                            'forecast_date': forecast_dates[period-1] if period-1 < len(forecast_dates) else f"{datetime.now().year + period//12}-{period%12 + 1:02d}-01"
+                        }
+
+            except Exception as fallback_error:
+                background_tasks[task_id] = {
+                    'status': 'failed',
+                    'error': f"Both ML and statistical fallback failed. ML error: {str(ml_error)}, Fallback error: {str(fallback_error)}",
+                    'end_time': time.time()
+                }
+                return
+
+        # Save forecast to database
+        try:
+            forecast_data = {
+                **forecast_result,
+                'method_used': method_used,
+                'fallback_used': method_used == 'statistical_fallback'
+            }
+            db.save_forecast(user_id, geometry, forecast_data)
+        except Exception as db_error:
+            print(f"Database save error: {db_error}")
+
+        # Store results
+        background_tasks[task_id] = {
+            'status': 'completed',
+            'result': {
+                **forecast_result,
+                'method_used': method_used,
+                'fallback_used': method_used == 'statistical_fallback'
+            },
+            'end_time': time.time()
+        }
+
+    except Exception as e:
+        background_tasks[task_id] = {
+            'status': 'failed',
+            'error': str(e),
+            'end_time': time.time()
+        }
+
+async def run_model_training_async(task_id, geometry, user_id, model_settings=None):
+    """Run model training in background for a specific ROI."""
+    try:
+        background_tasks[task_id] = {'status': 'processing', 'start_time': time.time()}
+
+        # Validate geometry
+        if not geometry or 'coordinates' not in geometry:
+            background_tasks[task_id] = {
+                'status': 'failed',
+                'error': 'Invalid geometry provided',
+                'end_time': time.time()
+            }
+            return
+
+        # Convert geometry to GEE format
+        import ee
+        roi = ee.Geometry.Polygon(geometry['coordinates'])
+
+        # Initialize GEEForecaster
+        # Use last 2 years of data for training
+        end_date = datetime.now().strftime('%Y-%m-%d')
+        start_date = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%d')
+
+        forecaster = GEEForecaster(roi, start_date, end_date, model_settings)
+
+        # Train models
+        training_result = forecaster.train_models()
+        if 'error' in training_result:
+            background_tasks[task_id] = {
+                'status': 'failed',
+                'error': f"Model training failed: {training_result['error']}",
+                'end_time': time.time()
+            }
+            return
+
+        # Save trained model metadata
+        geometry_hash = db.generate_geometry_hash(geometry)
+        model_key = f"gee_forecaster_{geometry_hash}_{int(time.time())}"
+        forecaster.save_models(f"models/{model_key}")
+
+        # Store training results
+        result = {
+            'model_key': model_key,
+            'training_result': training_result,
+            'geometry_hash': geometry_hash,
+            'created_at': datetime.now().isoformat()
+        }
+
+        background_tasks[task_id] = {
+            'status': 'completed',
+            'result': result,
+            'end_time': time.time()
+        }
+
+    except Exception as e:
+        background_tasks[task_id] = {
+            'status': 'failed',
+            'error': str(e),
+            'end_time': time.time()
+        }
+
+@app.route('/api/forecast/vegetation', methods=['POST'])
+@token_required
+def forecast_vegetation():
+    """Main vegetation forecasting endpoint that accepts ROI and periods."""
+    try:
+        data = request.get_json()
+        geometry = data.get('geometry')
+        periods = data.get('periods', [3, 6, 12])  # Default periods
+        use_fallback = data.get('use_fallback', True)  # Default to using fallback
+
+        if not geometry:
+            return jsonify({'error': 'No geometry provided'}), 400
+
+        if not isinstance(periods, list) or not all(isinstance(p, int) and p > 0 for p in periods):
+            return jsonify({'error': 'Periods must be a list of positive integers'}), 400
+
+        # Validate periods are reasonable (max 24 months)
+        if any(p > 24 for p in periods):
+            return jsonify({'error': 'Maximum forecast period is 24 months'}), 400
+
+        # Generate unique task ID
+        task_id = f"veg_forecast_{int(time.time())}_{hash(str(geometry)) % 10000}"
+        user_id = request.user_id
+
+        # Start async task
+        asyncio.create_task(run_vegetation_forecast_async(task_id, geometry, periods, user_id, use_fallback))
+
+        return jsonify({
+            'task_id': task_id,
+            'status': 'accepted',
+            'message': 'Vegetation forecasting task started',
+            'periods': periods,
+            'fallback_enabled': use_fallback
+        }), 202
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/forecast/status/<task_id>', methods=['GET'])
+@token_required
+def get_forecast_status(task_id):
+    """Check status of async forecasting tasks."""
+    if task_id not in background_tasks:
+        return jsonify({'error': 'Task not found'}), 404
+
+    task = background_tasks[task_id]
+    response = {'task_id': task_id, 'status': task['status']}
+
+    if task['status'] == 'completed':
+        response['result'] = task['result']
+    elif task['status'] == 'failed':
+        response['error'] = task['error']
+
+    if 'start_time' in task:
+        response['start_time'] = task['start_time']
+    if 'end_time' in task:
+        response['end_time'] = task['end_time']
+        response['duration'] = task['end_time'] - task['start_time']
+
+    return jsonify(response)
+
+@app.route('/api/models/list', methods=['GET'])
+@token_required
+def list_models():
+    """List available trained models."""
+    try:
+        import os
+        import glob
+
+        models_dir = 'models'
+        if not os.path.exists(models_dir):
+            return jsonify({'models': []})
+
+        # Find all model metadata files
+        model_files = glob.glob(os.path.join(models_dir, '*_metadata.json'))
+
+        models = []
+        for model_file in model_files:
+            try:
+                with open(model_file, 'r') as f:
+                    metadata = json.load(f)
+
+                # Extract model key from filename
+                model_key = os.path.basename(model_file).replace('_metadata.json', '')
+
+                models.append({
+                    'model_key': model_key,
+                    'created_at': metadata.get('saved_at'),
+                    'training_samples': metadata.get('training_samples_count', 0),
+                    'testing_samples': metadata.get('testing_samples_count', 0),
+                    'model_settings': metadata.get('model_settings', {}),
+                    'date_range': {
+                        'start_date': metadata.get('start_date'),
+                        'end_date': metadata.get('end_date')
+                    },
+                    'roi_bounds': metadata.get('roi_bounds')
+                })
+            except Exception as e:
+                print(f"Error reading model file {model_file}: {e}")
+                continue
+
+        # Sort by creation date (newest first)
+        models.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+
+        return jsonify({'models': models})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/models/train', methods=['POST'])
+@token_required
+def train_model():
+    """Train new models for a specific ROI."""
+    try:
+        data = request.get_json()
+        geometry = data.get('geometry')
+        model_settings = data.get('model_settings', {})
+
+        if not geometry:
+            return jsonify({'error': 'No geometry provided'}), 400
+
+        # Validate model settings
+        valid_settings = ['numberOfTrees', 'maxNodes', 'test_size']
+        for key in model_settings:
+            if key not in valid_settings:
+                return jsonify({'error': f'Invalid model setting: {key}'}), 400
+
+        # Set defaults and validate ranges
+        settings = {
+            'numberOfTrees': min(max(model_settings.get('numberOfTrees', 100), 10), 500),
+            'maxNodes': min(max(model_settings.get('maxNodes', 10), 5), 50),
+            'test_size': min(max(model_settings.get('test_size', 0.3), 0.1), 0.5)
+        }
+
+        # Generate unique task ID
+        task_id = f"model_train_{int(time.time())}_{hash(str(geometry)) % 10000}"
+        user_id = request.user_id
+
+        # Start async training task
+        asyncio.create_task(run_model_training_async(task_id, geometry, user_id, settings))
+
+        return jsonify({
+            'task_id': task_id,
+            'status': 'accepted',
+            'message': 'Model training task started',
+            'model_settings': settings
+        }), 202
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/forecast/compare', methods=['POST'])
+@token_required
+def compare_forecasts():
+    """Compare ML and statistical forecasting models."""
+    try:
+        data = request.get_json()
+        geometry = data.get('geometry')
+        periods = data.get('periods', [3, 6, 12])
+        model_key = data.get('model_key')  # Optional: specific ML model to use
+
+        if not geometry:
+            return jsonify({'error': 'No geometry provided'}), 400
+
+        if not isinstance(periods, list) or not all(isinstance(p, int) and p > 0 for p in periods):
+            return jsonify({'error': 'Periods must be a list of positive integers'}), 400
+
+        # Validate periods are reasonable (max 24 months)
+        if any(p > 24 for p in periods):
+            return jsonify({'error': 'Maximum forecast period is 24 months'}), 400
+
+        user_id = request.user_id
+
+        # Get historical NDVI data for statistical forecasting
+        try:
+            historical_data = get_historical_ndvi(geometry, years=2)
+            if 'error' in historical_data:
+                return jsonify({'error': f"Failed to get historical data: {historical_data['error']}"}), 500
+        except Exception as e:
+            return jsonify({'error': f"Failed to retrieve historical data: {str(e)}"}), 500
+
+        # Prepare data for statistical forecasting
+        historical_ndvi = {
+            'dates': historical_data['dates'],
+            'values': historical_data['ndvi_values']
+        }
+
+        # Generate statistical forecast
+        statistical_forecast = forecast_ndvi(historical_ndvi, max(periods))
+
+        # Try to get ML forecast
+        ml_forecast = None
+        ml_error = None
+
+        if model_key:
+            # Try to load specific model
+            try:
+                import os
+                metadata_file = f"models/{model_key}_metadata.json"
+                if os.path.exists(metadata_file):
+                    with open(metadata_file, 'r') as f:
+                        metadata = json.load(f)
+
+                    # Create forecaster with saved settings
+                    import ee
+                    roi = ee.Geometry.Polygon(geometry['coordinates'])
+                    forecaster = GEEForecaster(
+                        roi,
+                        metadata['start_date'],
+                        metadata['end_date'],
+                        metadata.get('model_settings', {})
+                    )
+
+                    # Load and use the model
+                    forecaster.load_models(f"models/{model_key}")
+                    ml_forecast = forecaster.forecast(periods)
+                else:
+                    ml_error = f"Model {model_key} not found"
+            except Exception as e:
+                ml_error = f"Failed to load ML model: {str(e)}"
+        else:
+            # Try to create and use ML forecast on-the-fly (may be slow)
+            try:
+                import ee
+                roi = ee.Geometry.Polygon(geometry['coordinates'])
+                end_date = datetime.now().strftime('%Y-%m-%d')
+                start_date = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%d')
+
+                forecaster = GEEForecaster(roi, start_date, end_date)
+                training_result = forecaster.train_models(include_validation=False, include_cv=False)
+
+                if 'error' not in training_result:
+                    ml_forecast = forecaster.forecast(periods)
+                else:
+                    ml_error = f"ML training failed: {training_result['error']}"
+            except Exception as e:
+                ml_error = f"ML forecasting failed: {str(e)}"
+
+        # Prepare comparison response
+        comparison = {
+            'periods': periods,
+            'statistical_forecast': statistical_forecast if 'error' not in statistical_forecast else None,
+            'ml_forecast': ml_forecast.get('forecasts') if ml_forecast and 'error' not in ml_forecast else None,
+            'ml_error': ml_error,
+            'comparison_metrics': {}
+        }
+
+        # Calculate comparison metrics if both forecasts are available
+        if (comparison['statistical_forecast'] and 'error' not in comparison['statistical_forecast'] and
+            comparison['ml_forecast']):
+
+            # For simplicity, compare final period forecasts
+            final_period = max(periods)
+            stat_values = comparison['statistical_forecast'].get('forecast_values', [])
+            ml_values = []
+            for period_key, period_data in comparison['ml_forecast'].items():
+                if period_data.get('period_months') == final_period:
+                    ml_values.extend([
+                        period_data.get('predicted_ndvi', 0),
+                        period_data.get('predicted_savi', 0),
+                        period_data.get('predicted_evi', 0)
+                    ])
+
+            if stat_values and ml_values:
+                # Calculate simple metrics (ML vs Statistical for final period)
+                stat_avg = sum(stat_values) / len(stat_values) if stat_values else 0
+                ml_avg = sum(ml_values) / len(ml_values) if ml_values else 0
+
+                comparison['comparison_metrics'] = {
+                    'final_period_months': final_period,
+                    'statistical_avg': round(stat_avg, 4),
+                    'ml_avg': round(ml_avg, 4),
+                    'difference': round(ml_avg - stat_avg, 4),
+                    'ml_improvement_pct': round(((ml_avg - stat_avg) / abs(stat_avg)) * 100, 2) if stat_avg != 0 else 0
+                }
+
+        return jsonify(comparison)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/task/<task_id>', methods=['GET'])
 def get_task_status(task_id):

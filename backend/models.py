@@ -10,7 +10,7 @@ import bcrypt
 from functools import wraps
 import pandas as pd
 import numpy as np
-from flask import make_response
+from flask import make_response, jsonify
 
 class Database:
     def __init__(self):
