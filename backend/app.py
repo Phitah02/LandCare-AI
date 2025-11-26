@@ -22,6 +22,8 @@ CORS(app, origins=[
     "http://localhost:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
     "https://landcare-ai-frontend.onrender.com",
     "https://land-care-ai-dl98.vercel.app"
 ], methods=['GET', 'POST', 'OPTIONS'], supports_credentials=True, allow_headers=['Authorization', 'Content-Type'])
@@ -463,6 +465,10 @@ def historical_savi():
 def historical_weather(lat, lon):
     """Get historical weather data for coordinates with caching."""
     try:
+        # Handle OPTIONS requests (CORS preflight)
+        if request.method == 'OPTIONS':
+            return '', 200
+
         # Check if using date range or days
         start_date_str = request.args.get('start_date')
         end_date_str = request.args.get('end_date')
@@ -696,6 +702,10 @@ async def run_ndvi_forecast_async(task_id, geometry, months, user_id):
 @token_required
 def forecast_weather_route(lat, lon):
     try:
+        # Handle OPTIONS requests (CORS preflight)
+        if request.method == 'OPTIONS':
+            return '', 200
+
         days = int(request.args.get('days', 5))  # Default to 5 days, max 16
         user_id = request.user_id
 
