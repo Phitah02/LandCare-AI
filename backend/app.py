@@ -24,7 +24,7 @@ CORS(app, origins=[
     "http://127.0.0.1:8000",
     "https://landcare-ai-frontend.onrender.com",
     "https://land-care-ai-dl98.vercel.app"
-], methods=['GET', 'POST', 'OPTIONS'], supports_credentials=True)
+], methods=['GET', 'POST', 'OPTIONS'], supports_credentials=True, allow_headers=['Authorization', 'Content-Type'])
 app.config.from_object(Config)
 
 # Initialize GEE on startup
