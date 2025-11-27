@@ -389,16 +389,37 @@ class LandCareApp {
         if (results.ndvi && results.ndvi.NDVI !== undefined) {
             const ndviEl = document.getElementById('ndvi-value');
             if (ndviEl) ndviEl.textContent = results.ndvi.NDVI.toFixed(3);
+
+            const ndviSourceEl = document.getElementById('ndvi-source');
+            if (ndviSourceEl && results.ndvi.data_source) {
+                ndviSourceEl.setAttribute('data-source', results.ndvi.data_source);
+                ndviSourceEl.textContent = results.ndvi.data_source === 'satellite' ? '🛰️ Satellite' :
+                                         results.ndvi.data_source === 'mock' ? '⚠️ Mock' : results.ndvi.data_source;
+            }
         }
 
         if (results.evi && results.evi.EVI !== undefined) {
             const eviEl = document.getElementById('evi-value');
             if (eviEl) eviEl.textContent = results.evi.EVI.toFixed(3);
+
+            const eviSourceEl = document.getElementById('evi-source');
+            if (eviSourceEl && results.evi.data_source) {
+                eviSourceEl.setAttribute('data-source', results.evi.data_source);
+                eviSourceEl.textContent = results.evi.data_source === 'satellite' ? '🛰️ Satellite' :
+                                        results.evi.data_source === 'mock' ? '⚠️ Mock' : results.evi.data_source;
+            }
         }
 
         if (results.savi && results.savi.SAVI !== undefined) {
             const saviEl = document.getElementById('savi-value');
             if (saviEl) saviEl.textContent = results.savi.SAVI.toFixed(3);
+
+            const saviSourceEl = document.getElementById('savi-source');
+            if (saviSourceEl && results.savi.data_source) {
+                saviSourceEl.setAttribute('data-source', results.savi.data_source);
+                saviSourceEl.textContent = results.savi.data_source === 'satellite' ? '🛰️ Satellite' :
+                                         results.savi.data_source === 'mock' ? '⚠️ Mock' : results.savi.data_source;
+            }
         }
 
         // Update area in hectares
@@ -422,6 +443,13 @@ class LandCareApp {
         // Update detailed land cover types
         if (results.land_cover && (results.land_cover.land_cover_types || results.land_cover.land_cover_areas)) {
             this.updateLandCoverDisplay(results.land_cover);
+
+            const landCoverSourceEl = document.getElementById('land-cover-source');
+            if (landCoverSourceEl && results.land_cover.data_source) {
+                landCoverSourceEl.setAttribute('data-source', results.land_cover.data_source);
+                landCoverSourceEl.textContent = results.land_cover.data_source === 'satellite' ? '🛰️ Satellite' :
+                                              results.land_cover.data_source === 'mock' ? '⚠️ Mock' : results.land_cover.data_source;
+            }
         }
 
         if (results.weather && results.weather.main && results.weather.main.temp !== undefined) {
@@ -542,6 +570,13 @@ class LandCareApp {
         if (results.slope && results.slope.slope_mean !== undefined) {
             const slopeEl = document.getElementById('slope-value');
             if (slopeEl) slopeEl.textContent = `${results.slope.slope_mean.toFixed(1)}°`;
+
+            const slopeSourceEl = document.getElementById('slope-source');
+            if (slopeSourceEl && results.slope.data_source) {
+                slopeSourceEl.setAttribute('data-source', results.slope.data_source);
+                slopeSourceEl.textContent = results.slope.data_source === 'satellite' ? '🛰️ Satellite' :
+                                          results.slope.data_source === 'mock' ? '⚠️ Mock' : results.slope.data_source;
+            }
         }
 
         // Show results panel
@@ -571,6 +606,16 @@ class LandCareApp {
         if (landCoverDetailsEl) {
             landCoverDetailsEl.innerHTML = '';
         }
+
+        // Clear data source indicators
+        const dataSourceElements = ['ndvi-source', 'evi-source', 'savi-source', 'slope-source', 'land-cover-source'];
+        dataSourceElements.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = '';
+                el.removeAttribute('data-source');
+            }
+        });
 
         // Clear early warnings
         const earlyWarningsEl = document.getElementById('early-warnings-list');
