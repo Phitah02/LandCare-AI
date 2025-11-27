@@ -85,13 +85,18 @@ def get_ndvi(geometry):
             maxPixels=1e9
         )
 
-        return stats.getInfo()
+        result = stats.getInfo()
+        result['data_source'] = 'satellite'
+        result['source_details'] = 'Google Earth Engine Sentinel-2'
+        return result
     except Exception as e:
         # Return mock data on error
         return {
             'NDVI': 0.65,
             'error': str(e),
-            'note': 'Mock data due to error'
+            'note': 'Mock data due to error',
+            'data_source': 'mock',
+            'source_details': 'Fallback mock data'
         }
 
 def get_evi(geometry):
@@ -132,13 +137,18 @@ def get_evi(geometry):
             maxPixels=1e9
         )
 
-        return stats.getInfo()
+        result = stats.getInfo()
+        result['data_source'] = 'satellite'
+        result['source_details'] = 'Google Earth Engine Sentinel-2'
+        return result
     except Exception as e:
         # Return mock data on error
         return {
             'EVI': 0.45,
             'error': str(e),
-            'note': 'Mock data due to error'
+            'note': 'Mock data due to error',
+            'data_source': 'mock',
+            'source_details': 'Fallback mock data'
         }
 
 def get_savi(geometry, L=0.5):
@@ -178,13 +188,18 @@ def get_savi(geometry, L=0.5):
             maxPixels=1e9
         )
 
-        return stats.getInfo()
+        result = stats.getInfo()
+        result['data_source'] = 'satellite'
+        result['source_details'] = 'Google Earth Engine Sentinel-2'
+        return result
     except Exception as e:
         # Return mock data on error
         return {
             'SAVI': 0.55,
             'error': str(e),
-            'note': 'Mock data due to error'
+            'note': 'Mock data due to error',
+            'data_source': 'mock',
+            'source_details': 'Fallback mock data'
         }
 
 def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
@@ -218,7 +233,9 @@ def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
             return {
                 'dates': dates,
                 'ndvi_values': values,
-                'note': 'Mock data - GEE not initialized'
+                'note': 'Mock data - GEE not initialized',
+                'data_source': 'mock',
+                'source_details': 'Fallback mock data'
             }
 
         roi = ee.Geometry.Polygon(geometry['coordinates'])
@@ -251,10 +268,13 @@ def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
                 dates.append(props['date'])
                 values.append(props['ndvi'])
 
-        return {
+        result = {
             'dates': dates,
-            'ndvi_values': values
+            'ndvi_values': values,
+            'data_source': 'satellite',
+            'source_details': 'Google Earth Engine Landsat 8-Day NDVI'
         }
+        return result
 
     except Exception as e:
         # Return mock data on error
@@ -275,7 +295,9 @@ def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
             'dates': dates,
             'ndvi_values': values,
             'error': str(e),
-            'note': 'Mock data due to error'
+            'note': 'Mock data due to error',
+            'data_source': 'mock',
+            'source_details': 'Fallback mock data'
         }
 
 def get_historical_evi(geometry, start_date='1984-01-01', end_date=None):
@@ -309,7 +331,9 @@ def get_historical_evi(geometry, start_date='1984-01-01', end_date=None):
             return {
                 'dates': dates,
                 'evi_values': values,
-                'note': 'Mock data - GEE not initialized'
+                'note': 'Mock data - GEE not initialized',
+                'data_source': 'mock',
+                'source_details': 'Fallback mock data'
             }
 
         roi = ee.Geometry.Polygon(geometry['coordinates'])
@@ -392,10 +416,13 @@ def get_historical_evi(geometry, start_date='1984-01-01', end_date=None):
                 dates.append(f"{ym}-15")  # Mid-month date
                 values.append(evi_val)
 
-        return {
+        result = {
             'dates': dates,
-            'evi_values': values
+            'evi_values': values,
+            'data_source': 'satellite',
+            'source_details': 'Google Earth Engine Landsat Level 2'
         }
+        return result
 
     except Exception as e:
         # Return mock data on error
@@ -416,7 +443,9 @@ def get_historical_evi(geometry, start_date='1984-01-01', end_date=None):
             'dates': dates,
             'evi_values': values,
             'error': str(e),
-            'note': 'Mock data due to error'
+            'note': 'Mock data due to error',
+            'data_source': 'mock',
+            'source_details': 'Fallback mock data'
         }
 
 def get_historical_savi(geometry, start_date='1984-01-01', end_date=None, L=0.5):
@@ -450,7 +479,9 @@ def get_historical_savi(geometry, start_date='1984-01-01', end_date=None, L=0.5)
             return {
                 'dates': dates,
                 'savi_values': values,
-                'note': 'Mock data - GEE not initialized'
+                'note': 'Mock data - GEE not initialized',
+                'data_source': 'mock',
+                'source_details': 'Fallback mock data'
             }
 
         roi = ee.Geometry.Polygon(geometry['coordinates'])
@@ -532,10 +563,13 @@ def get_historical_savi(geometry, start_date='1984-01-01', end_date=None, L=0.5)
                 dates.append(f"{ym}-15")  # Mid-month date
                 values.append(savi_val)
 
-        return {
+        result = {
             'dates': dates,
-            'savi_values': values
+            'savi_values': values,
+            'data_source': 'satellite',
+            'source_details': 'Google Earth Engine Landsat Level 2'
         }
+        return result
 
     except Exception as e:
         # Return mock data on error
@@ -556,7 +590,9 @@ def get_historical_savi(geometry, start_date='1984-01-01', end_date=None, L=0.5)
             'dates': dates,
             'savi_values': values,
             'error': str(e),
-            'note': 'Mock data due to error'
+            'note': 'Mock data due to error',
+            'data_source': 'mock',
+            'source_details': 'Fallback mock data'
         }
 
 def get_land_cover(geometry):
@@ -614,6 +650,8 @@ def get_land_cover(geometry):
 
         lc_data['land_cover_types'] = land_cover_types  # Keep original for backward compatibility
         lc_data['land_cover_areas'] = land_cover_areas  # New km² format
+        lc_data['data_source'] = 'satellite'
+        lc_data['source_details'] = 'Google Earth Engine ESA WorldCover'
         return lc_data
     except Exception as e:
         # Return mock data on error
@@ -633,7 +671,9 @@ def get_land_cover(geometry):
                 'Built-up': 450
             },
             'error': str(e),
-            'note': 'Mock data due to error'
+            'note': 'Mock data due to error',
+            'data_source': 'mock',
+            'source_details': 'Fallback mock data'
         }
 
 def get_slope_data(geometry):
@@ -655,13 +695,18 @@ def get_slope_data(geometry):
             maxPixels=1e9
         )
 
-        return slope_stats.getInfo()
+        result = slope_stats.getInfo()
+        result['data_source'] = 'satellite'
+        result['source_details'] = 'Google Earth Engine SRTM DEM'
+        return result
     except Exception as e:
         return {
             'slope_mean': 15.2,
             'slope_max': 45.8,
             'error': str(e),
-            'note': 'Mock data due to error'
+            'note': 'Mock data due to error',
+            'data_source': 'mock',
+            'source_details': 'Fallback mock data'
         }
 
 def calculate_risk_score(ndvi_data, land_cover_data, slope_data, weather_data, evi_data=None, savi_data=None):
@@ -800,7 +845,9 @@ def calculate_risk_score(ndvi_data, land_cover_data, slope_data, weather_data, e
             'risk_level': 'Medium',
             'risk_color': '#fbc02d',
             'error': str(e),
-            'note': 'Risk calculation failed, using default values'
+            'note': 'Risk calculation failed, using default values',
+            'data_source': 'calculated',
+            'source_details': 'Risk assessment calculation with fallback values'
         }
 
 
@@ -836,7 +883,9 @@ def get_historical_vis(geometry, start_date='1984-01-01', end_date=None):
                 'ndvi_values': ndvi_values,
                 'evi_values': evi_values,
                 'savi_values': savi_values,
-                'note': 'Mock data - GEE not initialized'
+                'note': 'Mock data - GEE not initialized',
+                'data_source': 'mock',
+                'source_details': 'Fallback mock data'
             }
 
         roi = ee.Geometry.Polygon(geometry['coordinates'])
@@ -981,12 +1030,15 @@ def get_historical_vis(geometry, start_date='1984-01-01', end_date=None):
                 evi_values.append(vis_data.get('evi'))
                 savi_values.append(vis_data.get('savi'))
 
-        return {
+        result = {
             'dates': dates,
             'ndvi_values': ndvi_values,
             'evi_values': evi_values,
-            'savi_values': savi_values
+            'savi_values': savi_values,
+            'data_source': 'satellite',
+            'source_details': 'Google Earth Engine Landsat/Sentinel composites'
         }
+        return result
 
     except Exception as e:
         # Return mock data on error
@@ -1017,7 +1069,9 @@ def get_historical_vis(geometry, start_date='1984-01-01', end_date=None):
             'evi_values': evi_values,
             'savi_values': savi_values,
             'error': str(e),
-            'note': 'Mock data due to error'
+            'note': 'Mock data due to error',
+            'data_source': 'mock',
+            'source_details': 'Fallback mock data'
         }
 
 def get_risk_recommendations(risk_score, risk_level):
