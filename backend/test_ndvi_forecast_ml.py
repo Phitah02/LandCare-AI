@@ -441,7 +441,17 @@ class TestGEEForecaster(unittest.TestCase):
         self.forecaster.savi_classifier = self.mock_classifier
         self.forecaster.evi_classifier = self.mock_classifier
 
-        # Mock date and image operations
+        # Setup mock collections
+        mock_vi_collection = mock.MagicMock()
+        mock_meteo_collection = mock.MagicMock()
+        mock_topo_image = mock.MagicMock()
+        mock_soil_image = mock.MagicMock()
+        self.forecaster.vi_collection = mock_vi_collection
+        self.forecaster.meteo_collection = mock_meteo_collection
+        self.forecaster.topo_image = mock_topo_image
+        self.forecaster.soil_image = mock_soil_image
+
+        # Mock date operations
         mock_date = mock.MagicMock()
         mock_future_date = mock.MagicMock()
         mock_ee.Date.return_value = mock_date
@@ -449,9 +459,28 @@ class TestGEEForecaster(unittest.TestCase):
         mock_future_date.format.return_value = mock_future_date
         mock_future_date.getInfo.return_value = "2024-03-01"
 
+        # Mock VI data extraction
+        mock_sorted_vi = mock.MagicMock()
+        mock_limited_vi = mock.MagicMock()
+        mock_vi_list = mock.MagicMock()
+        mock_image = mock.MagicMock()
+        mock_vi_collection.sort.return_value = mock_sorted_vi
+        mock_sorted_vi.limit.return_value = mock_limited_vi
+        mock_limited_vi.toList.return_value = mock_vi_list
+        mock_vi_list.get.return_value = mock_image
+        mock_image.select.return_value = mock_image
+
+        # Mock meteorological data
+        mock_sorted_meteo = mock.MagicMock()
+        mock_last_meteo = mock.MagicMock()
+        mock_meteo_collection.sort.return_value = mock_sorted_meteo
+        mock_sorted_meteo.first.return_value = mock_last_meteo
+
+        # Mock image operations
         mock_feature_image = mock.MagicMock()
         mock_prediction = mock.MagicMock()
-        mock_ee.Image.constant.return_value = mock_feature_image
+        mock_ee.Image.return_value = mock_image
+        mock_image.addBands.return_value = mock_feature_image
         mock_feature_image.classify.return_value = mock_prediction
         mock_feature_image.clip.return_value = mock_feature_image
 

@@ -695,32 +695,41 @@ class GEEForecaster:
             # Create future date
             future_date = current_date.advance(period, 'month')
 
-            # Create future feature scenario (simplified - in practice, use actual forecasts)
-            # This would typically use meteorological forecasts for future conditions
+            # Create area-specific future feature scenario using actual historical data
+            # Extract most recent historical VI data for lagged features
+            last_vi_images = self.vi_collection.sort('system:time_start', False).limit(12)
+            vi_list = last_vi_images.toList(12)
 
-            # For demonstration, create a synthetic future image with typical values
-            # In production, this should use actual forecasted meteorological data
+            # Create lagged VI features from historical data
+            ndvi_lag1 = ee.Image(vi_list.get(0)).select('NDVI').rename('NDVI_lag1')
+            ndvi_lag2 = ee.Image(vi_list.get(1)).select('NDVI').rename('NDVI_lag2')
+            ndvi_lag12 = ee.Image(vi_list.get(11)).select('NDVI').rename('NDVI_lag12')
 
-            # Create synthetic future features based on historical patterns
-            future_features = ee.Image.constant([
-                0.6,  # NDVI_lag1
-                0.55, # NDVI_lag2
-                0.58, # NDVI_lag12
-                0.5,  # SAVI_lag1
-                0.45, # SAVI_lag2
-                0.48, # SAVI_lag12
-                0.4,  # EVI_lag1
-                0.35, # EVI_lag2
-                0.38, # EVI_lag12
-                50.0, # precip_monthly
-                120.0, # precip_1month_sum
-                280.0, # precip_3month_sum
-                295.0, # temp_monthly (Kelvin)
-                1.2,  # vpd_monthly
-                1500.0, # elevation
-                5.0,  # slope
-                3.0, 4.0, 5.0, 6.0, 7.0, 8.0  # soil texture classes
-            ]).rename(self.feature_bands).clip(self.roi)
+            savi_lag1 = ee.Image(vi_list.get(0)).select('SAVI').rename('SAVI_lag1')
+            savi_lag2 = ee.Image(vi_list.get(1)).select('SAVI').rename('SAVI_lag2')
+            savi_lag12 = ee.Image(vi_list.get(11)).select('SAVI').rename('SAVI_lag12')
+
+            evi_lag1 = ee.Image(vi_list.get(0)).select('EVI').rename('EVI_lag1')
+            evi_lag2 = ee.Image(vi_list.get(1)).select('EVI').rename('EVI_lag2')
+            evi_lag12 = ee.Image(vi_list.get(11)).select('EVI').rename('EVI_lag12')
+
+            # Extract recent meteorological conditions
+            last_meteo = self.meteo_collection.sort('system:time_start', False).first()
+
+            # Combine features: lagged VI + recent meteorological + static topographic/soil
+            future_features = (ndvi_lag1
+                .addBands(ndvi_lag2)
+                .addBands(ndvi_lag12)
+                .addBands(savi_lag1)
+                .addBands(savi_lag2)
+                .addBands(savi_lag12)
+                .addBands(evi_lag1)
+                .addBands(evi_lag2)
+                .addBands(evi_lag12)
+                .addBands(last_meteo)
+                .addBands(self.topo_image)
+                .addBands(self.soil_image)
+                .clip(self.roi))
 
             # Classify the future scenario for each index
             ndvi_prediction = future_features.classify(self.ndvi_classifier)
