@@ -40,9 +40,9 @@ def log_cors_request():
 def log_cors_response(response):
     """Log CORS response headers for debugging and ensure CORS headers are present."""
     cors_headers = {}
-    for header_name in response.headers:
+    for header_name, header_value in response.headers.items():
         if header_name.lower().startswith('access-control'):
-            cors_headers[header_name] = response.headers[header_name]
+            cors_headers[header_name] = header_value
 
     if cors_headers:
         print(f"CORS Response Headers: {cors_headers}")

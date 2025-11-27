@@ -55,10 +55,8 @@ def initialize_gee():
                 print("GEE service account credentials not properly configured")
         except Exception as service_error:
             print(f"GEE service account initialization failed: {service_error}")
-        
-        # For development: return True to allow testing without GEE
-        print("WARNING: GEE not initialized. Running in development mode with mock data.")
-        return True
+
+        return False
 
 def get_ndvi(geometry):
     """Calculate NDVI for given geometry."""
