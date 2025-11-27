@@ -270,7 +270,7 @@ def get_savi(geometry, L=0.5):
         }
 
 def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
-    """Get historical NDVI data using Landsat 8-Day VI Composite Collection."""
+    """Get historical NDVI data using Landsat Level 2 with monthly averages."""
     try:
         if end_date is None:
             end_date = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -296,7 +296,7 @@ def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
             while current <= end:
                 dates.append(current.strftime('%Y-%m-%d'))
                 values.append(0.5 + 0.3 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
-                current += datetime.timedelta(days=8)  # 8-day intervals
+                current += datetime.timedelta(days=30)  # Monthly intervals
             return {
                 'dates': dates,
                 'ndvi_values': values,
@@ -307,39 +307,83 @@ def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
 
         roi = ee.Geometry.Polygon(geometry['coordinates'])
 
-        # Get Landsat 8-Day NDVI Composite Collection
-        collection = ee.ImageCollection('LANDSAT/LC8_L1T_8DAY_NDVI') \
+        # Get Landsat Level 2 collection
+        # Use Landsat 8 (LC08) for recent data, could extend to 5/7 for older data if needed
+        # For simplicity and consistency with other functions, using LC08
+        collection = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2') \
             .filterBounds(roi) \
-            .filterDate(start_date, end_date)
+            .filterDate(start_date, end_date) \
+            .filter(ee.Filter.lt('CLOUD_COVER', 20)) \
+            .select(['SR_B4', 'SR_B5'])  # Red, NIR
 
-        # Get all images and extract dates and values
-        def extract_ndvi(image):
-            date = image.date().format('YYYY-MM-dd')
-            ndvi = image.reduceRegion(
-                reducer=ee.Reducer.mean(),
-                geometry=roi,
-                scale=30,
-                maxPixels=1e9
-            ).get('NDVI')
-            return ee.Feature(None, {'date': date, 'ndvi': ndvi})
+        # Create a list of year-month combinations
+        year_months = []
+        current = start
+        while current <= end:
+            year_months.append(f"{current.year}-{current.month:02d}")
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
 
-        features = collection.map(extract_ndvi)
-        results = features.getInfo()
+        # Define a function to calculate NDVI for each month
+        def calculate_monthly_ndvi(ym_str):
+            ym_str = ee.String(ym_str)
+            parts = ym_str.split('-')
+            year = ee.Number.parse(parts.get(0))
+            month = ee.Number.parse(parts.get(1))
+
+            start = ee.Date.fromYMD(year, month, 1)
+            end = ee.Date.fromYMD(
+                ee.Algorithms.If(month.eq(12), year.add(1), year),
+                ee.Algorithms.If(month.eq(12), 1, month.add(1)),
+                1
+            )
+
+            monthly_collection = collection.filterDate(start, end)
+            monthly_size = monthly_collection.size()
+
+            # Calculate mean NDVI for the month
+            def compute_ndvi():
+                monthly_image = monthly_collection.mean()
+                # NDVI = (NIR - Red) / (NIR + Red)
+                # Landsat 8: NIR = B5, Red = B4
+                monthly_ndvi = monthly_image.normalizedDifference(['SR_B5', 'SR_B4'])
+
+                mean_ndvi = monthly_ndvi.reduceRegion(
+                    reducer=ee.Reducer.mean(),
+                    geometry=roi,
+                    scale=30,
+                    maxPixels=1e9
+                )
+                return mean_ndvi.get('nd')
+
+            # Return null if no images, otherwise compute NDVI
+            return ee.Algorithms.If(monthly_size.gt(0), compute_ndvi(), None)
+
+        # Create an ee.List of year-month strings
+        ym_list = ee.List(year_months)
+
+        # Map the function over the list
+        ndvi_results = ym_list.map(calculate_monthly_ndvi)
+
+        # Get the results as a list
+        results_list = ndvi_results.getInfo()
 
         # Process results
         dates = []
         values = []
-        for feature in results['features']:
-            props = feature['properties']
-            if props['ndvi'] is not None:
-                dates.append(props['date'])
-                values.append(props['ndvi'])
+        for i, ym in enumerate(year_months):
+            ndvi_val = results_list[i]
+            if ndvi_val is not None:
+                dates.append(f"{ym}-15")  # Mid-month date
+                values.append(ndvi_val)
 
         result = {
             'dates': dates,
             'ndvi_values': values,
             'data_source': 'satellite',
-            'source_details': 'Google Earth Engine Landsat 8-Day NDVI'
+            'source_details': 'Google Earth Engine Landsat Level 2'
         }
         return result
 
@@ -357,7 +401,7 @@ def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
         while current <= end_dt:
             dates.append(current.strftime('%Y-%m-%d'))
             values.append(0.5 + 0.3 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
-            current += datetime.timedelta(days=8)
+            current += datetime.timedelta(days=30)
         return {
             'dates': dates,
             'ndvi_values': values,
