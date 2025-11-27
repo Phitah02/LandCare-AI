@@ -61,21 +61,6 @@ def initialize_gee():
 def get_ndvi(geometry):
     """Calculate NDVI for given geometry."""
     try:
-        # Check if GEE is properly initialized by trying to access it
-        try:
-            # Try to create a simple geometry to test if GEE is working
-            test_geometry = ee.Geometry.Point([0, 0])
-            gee_initialized = True
-        except:
-            gee_initialized = False
-
-        if not gee_initialized:
-            # Return mock data for development
-            return {
-                'NDVI': 0.65,
-                'note': 'Mock data - GEE not initialized'
-            }
-
         # Define the region of interest
         roi = ee.Geometry.Polygon(geometry['coordinates'])
 
@@ -112,20 +97,6 @@ def get_ndvi(geometry):
 def get_evi(geometry):
     """Calculate EVI (Enhanced Vegetation Index) for given geometry."""
     try:
-        # Check if GEE is properly initialized
-        try:
-            test_geometry = ee.Geometry.Point([0, 0])
-            gee_initialized = True
-        except:
-            gee_initialized = False
-
-        if not gee_initialized:
-            # Return mock data for development
-            return {
-                'EVI': 0.45,
-                'note': 'Mock data - GEE not initialized'
-            }
-
         # Define the region of interest
         roi = ee.Geometry.Polygon(geometry['coordinates'])
 
@@ -173,20 +144,6 @@ def get_evi(geometry):
 def get_savi(geometry, L=0.5):
     """Calculate SAVI (Soil-Adjusted Vegetation Index) for given geometry."""
     try:
-        # Check if GEE is properly initialized
-        try:
-            test_geometry = ee.Geometry.Point([0, 0])
-            gee_initialized = True
-        except:
-            gee_initialized = False
-
-        if not gee_initialized:
-            # Return mock data for development
-            return {
-                'SAVI': 0.55,
-                'note': 'Mock data - GEE not initialized'
-            }
-
         # Define the region of interest
         roi = ee.Geometry.Polygon(geometry['coordinates'])
 
@@ -605,34 +562,6 @@ def get_historical_savi(geometry, start_date='1984-01-01', end_date=None, L=0.5)
 def get_land_cover(geometry):
     """Get land cover classification for given geometry."""
     try:
-        # Check if GEE is properly initialized by trying to access it
-        try:
-            # Try to create a simple geometry to test if GEE is working
-            test_geometry = ee.Geometry.Point([0, 0])
-            gee_initialized = True
-        except:
-            gee_initialized = False
-
-        if not gee_initialized:
-            # Return mock data for development
-            return {
-                'Map': {
-                    '10': 1250,  # Tree cover
-                    '20': 850,   # Shrubland
-                    '30': 2100,  # Grassland
-                    '40': 1800,  # Cropland
-                    '50': 450    # Built-up
-                },
-                'land_cover_types': {
-                    'Tree cover': 1250,
-                    'Shrubland': 850,
-                    'Grassland': 2100,
-                    'Cropland': 1800,
-                    'Built-up': 450
-                },
-                'note': 'Mock data - GEE not initialized'
-            }
-
         roi = ee.Geometry.Polygon(geometry['coordinates'])
 
         # ESA WorldCover 2021
@@ -710,28 +639,14 @@ def get_land_cover(geometry):
 def get_slope_data(geometry):
     """Get slope data for erosion risk assessment."""
     try:
-        try:
-            test_geometry = ee.Geometry.Point([0, 0])
-            gee_initialized = True
-        except:
-            gee_initialized = False
-        
-        if not gee_initialized:
-            # Return mock slope data
-            return {
-                'slope_mean': 15.2,
-                'slope_max': 45.8,
-                'note': 'Mock data - GEE not initialized'
-            }
-        
         roi = ee.Geometry.Polygon(geometry['coordinates'])
-        
+
         # Get SRTM elevation data
         elevation = ee.Image('USGS/SRTMGL1_003')
-        
+
         # Calculate slope
         slope = ee.Terrain.slope(elevation)
-        
+
         # Get slope statistics
         slope_stats = slope.reduceRegion(
             reducer=ee.Reducer.mean().combine(ee.Reducer.max(), sharedInputs=True),
@@ -739,7 +654,7 @@ def get_slope_data(geometry):
             scale=30,
             maxPixels=1e9
         )
-        
+
         return slope_stats.getInfo()
     except Exception as e:
         return {

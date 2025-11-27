@@ -1,6 +1,6 @@
 import asyncio
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from config.config import Config
 from gee_processor import initialize_gee, get_ndvi, get_evi, get_savi, get_land_cover, get_slope_data, calculate_risk_score, get_historical_ndvi, get_historical_evi, get_historical_savi, get_historical_vis
 import math
@@ -255,12 +255,14 @@ def analyze():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@cross_origin(origins=["https://landcare-ai-frontend.onrender.com"])
 @app.route('/weather/<float:lat>/<float:lon>', methods=['GET'])
 def weather(lat, lon):
     """Get current weather for coordinates."""
     weather_data = get_weather_data(lat, lon)
     return jsonify(weather_data)
 
+@cross_origin(origins=["https://landcare-ai-frontend.onrender.com"])
 @app.route('/forecast/<float:lat>/<float:lon>', methods=['GET'])
 def forecast(lat, lon):
     """Get weather forecast for coordinates."""
@@ -501,6 +503,7 @@ def historical_savi():
 
 
 
+@cross_origin(origins=["https://landcare-ai-frontend.onrender.com"])
 @app.route('/historical/weather/<float:lat>/<float:lon>', methods=['GET'])
 @token_required
 def historical_weather(lat, lon):
@@ -735,6 +738,7 @@ async def run_ndvi_forecast_async(task_id, geometry, months, user_id):
 
 
 
+@cross_origin(origins=["https://landcare-ai-frontend.onrender.com"])
 @app.route('/forecast/weather/<float:lat>/<float:lon>', methods=['GET'])
 @token_required
 def forecast_weather_route(lat, lon):
