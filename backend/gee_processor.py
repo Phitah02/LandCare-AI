@@ -5,58 +5,125 @@ import datetime
 import numpy as np
 
 def initialize_gee():
-    """Initialize Google Earth Engine with user authentication or service account."""
-    try:
-        # Try to initialize without project first (uses default)
-        ee.Initialize()
-        print("GEE initialized successfully with user authentication")
-        return True
-    except Exception as e1:
-        print(f"GEE initialization without project failed: {e1}")
-        
-        # Try with service account JSON file first
+    """Initialize Google Earth Engine with prioritized authentication based on environment.
+
+    For production/cloud environments (Render, headless servers):
+    - Prioritizes service account authentication for reliability
+    - Falls back to interactive auth if service account fails
+
+    For local development:
+    - Prioritizes interactive authentication for ease of use
+    - Falls back to service account if interactive auth fails
+    """
+    import os
+
+    # Environment detection: Check for headless/cloud environment indicators
+    is_headless = (
+        os.environ.get('DISPLAY') is None or  # No display (headless)
+        os.environ.get('RENDER') is not None or  # Render deployment
+        os.environ.get('CI') is not None or  # CI environment
+        Config.FLASK_ENV == 'production' or  # Production environment
+        os.environ.get('GITHUB_ACTIONS') is not None  # GitHub Actions
+    )
+
+    print(f"Environment detected: {'headless/cloud' if is_headless else 'local development'}")
+
+    if is_headless:
+        # Production/Cloud: Try service account first
+        print("Prioritizing service account authentication for production environment...")
+
+        # Try service account with Config credentials first
+        if Config.GEE_SERVICE_ACCOUNT and Config.GEE_PRIVATE_KEY:
+            if "Your private key here" not in Config.GEE_PRIVATE_KEY:
+                try:
+                    print(f"Attempting service account authentication with: {Config.GEE_SERVICE_ACCOUNT}")
+                    credentials = ee.ServiceAccountCredentials(
+                        Config.GEE_SERVICE_ACCOUNT,
+                        key_data=Config.GEE_PRIVATE_KEY
+                    )
+                    ee.Initialize(credentials)
+                    print("[SUCCESS] GEE initialized successfully with service account (production)")
+                    return True
+                except Exception as e:
+                    print(f"[FAILED] Service account authentication failed: {str(e)}")
+                    print("  This may be due to invalid credentials, insufficient permissions, or network issues.")
+            else:
+                print("[FAILED] Service account private key not properly configured (contains placeholder text)")
+        else:
+            print("[FAILED] Service account credentials not found in environment variables")
+
+        # Fallback: Try service account with JSON file
         try:
-            import os
             json_file_path = os.path.join(os.path.dirname(__file__), 'ee-daudipeterkamau-14e6262536e5.json')
             if os.path.exists(json_file_path):
-                print(f"Attempting service account initialization with JSON file: {json_file_path}")
+                print(f"Attempting fallback service account authentication with JSON file: {json_file_path}")
                 credentials = ee.ServiceAccountCredentials(None, json_file_path)
                 ee.Initialize(credentials, project='ee-daudipeterkamau')
-                print("Service account initialization successful with JSON file")
-                return True
-        except Exception as json_error:
-            print(f"JSON file initialization failed: {json_error}")
-        
-        # Try with different project options
-        projects_to_try = ['earthengine-legacy', 'earthengine-public', 'ee-daudipeterkamau']
-        
-        for project in projects_to_try:
-            try:
-                print(f"Trying to initialize with project: {project}")
-                ee.Initialize(project=project)
-                print(f"Successfully initialized with project: {project}")
-                return True
-            except Exception as e2:
-                print(f"Failed with project {project}: {e2}")
-                continue
-        
-        # Fallback to service account if credentials are available
-        try:
-            if Config.GEE_SERVICE_ACCOUNT and Config.GEE_PRIVATE_KEY and "Your private key here" not in Config.GEE_PRIVATE_KEY:
-                print("Attempting service account initialization...")
-                credentials = ee.ServiceAccountCredentials(
-                    Config.GEE_SERVICE_ACCOUNT,
-                    key_data=Config.GEE_PRIVATE_KEY
-                )
-                ee.Initialize(credentials)
-                print("Service account initialization successful")
+                print("[SUCCESS] GEE initialized successfully with service account JSON file (production)")
                 return True
             else:
-                print("GEE service account credentials not properly configured")
-        except Exception as service_error:
-            print(f"GEE service account initialization failed: {service_error}")
+                print("[FAILED] Service account JSON file not found")
+        except Exception as e:
+            print(f"[FAILED] Service account JSON file authentication failed: {str(e)}")
 
-        return False
+        # Final fallback: Try interactive authentication
+        try:
+            print("Attempting fallback interactive authentication...")
+            ee.Initialize()
+            print("[SUCCESS] GEE initialized successfully with interactive authentication (fallback)")
+            return True
+        except Exception as e:
+            print(f"[FAILED] Interactive authentication failed: {str(e)}")
+            print("  This may require browser-based authentication which is not available in headless environment.")
+
+    else:
+        # Local Development: Try interactive authentication first
+        print("Prioritizing interactive authentication for local development...")
+
+        # Try interactive authentication first
+        try:
+            ee.Initialize()
+            print("[SUCCESS] GEE initialized successfully with interactive authentication (development)")
+            return True
+        except Exception as e:
+            print(f"[FAILED] Interactive authentication failed: {str(e)}")
+            print("  This may require completing the authentication flow in your browser.")
+
+        # Fallback: Try service account with Config credentials
+        if Config.GEE_SERVICE_ACCOUNT and Config.GEE_PRIVATE_KEY:
+            if "Your private key here" not in Config.GEE_PRIVATE_KEY:
+                try:
+                    print(f"Attempting fallback service account authentication with: {Config.GEE_SERVICE_ACCOUNT}")
+                    credentials = ee.ServiceAccountCredentials(
+                        Config.GEE_SERVICE_ACCOUNT,
+                        key_data=Config.GEE_PRIVATE_KEY
+                    )
+                    ee.Initialize(credentials)
+                    print("[SUCCESS] GEE initialized successfully with service account (development fallback)")
+                    return True
+                except Exception as e:
+                    print(f"[FAILED] Service account authentication failed: {str(e)}")
+            else:
+                print("[FAILED] Service account private key not properly configured (contains placeholder text)")
+        else:
+            print("[FAILED] Service account credentials not found in environment variables")
+
+        # Final fallback: Try service account with JSON file
+        try:
+            json_file_path = os.path.join(os.path.dirname(__file__), 'ee-daudipeterkamau-14e6262536e5.json')
+            if os.path.exists(json_file_path):
+                print(f"Attempting final fallback service account authentication with JSON file: {json_file_path}")
+                credentials = ee.ServiceAccountCredentials(None, json_file_path)
+                ee.Initialize(credentials, project='ee-daudipeterkamau')
+                print("[SUCCESS] GEE initialized successfully with service account JSON file (development fallback)")
+                return True
+            else:
+                print("[FAILED] Service account JSON file not found")
+        except Exception as e:
+            print(f"[FAILED] Service account JSON file authentication failed: {str(e)}")
+
+    print("[FAILED] All GEE authentication methods failed. Check credentials and network connectivity.")
+    return False
 
 def get_ndvi(geometry):
     """Calculate NDVI for given geometry."""
