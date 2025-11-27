@@ -13,6 +13,8 @@ import requests
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import time
+import logging
+import traceback
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
@@ -36,7 +38,7 @@ def log_cors_request():
 
 @app.after_request
 def log_cors_response(response):
-    """Log CORS response headers for debugging."""
+    """Log CORS response headers for debugging and ensure CORS headers are present."""
     cors_headers = {}
     for header_name in response.headers:
         if header_name.lower().startswith('access-control'):
@@ -46,6 +48,19 @@ def log_cors_response(response):
         print(f"CORS Response Headers: {cors_headers}")
     elif request.method == 'OPTIONS' or 'Origin' in request.headers:
         print("WARNING: No CORS headers found in response!")
+
+    # Ensure CORS headers are present in the response
+    if 'Access-Control-Allow-Origin' not in response.headers:
+        response.headers['Access-Control-Allow-Origin'] = '*'
+
+    if 'Access-Control-Allow-Methods' not in response.headers:
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+
+    if 'Access-Control-Allow-Headers' not in response.headers:
+        response.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, X-Requested-With, Accept, Accept-Encoding, Accept-Language, Cache-Control, Connection, Host, Origin, Referer, User-Agent'
+
+    if 'Access-Control-Allow-Credentials' not in response.headers:
+        response.headers['Access-Control-Allow-Credentials'] = 'false'
 
     return response
 
@@ -59,13 +74,19 @@ def health():
         return jsonify({
             'status': 'healthy',
             'gee_initialized': gee_initialized
-        })
-    except Exception as e:
-        print(f"Health check error: {e}")
-        return jsonify({
-            'status': 'healthy',
-            'gee_initialized': False
-        })
+        }), 200
+    except BaseException as e:
+        # Log detailed error information
+        logging.error(f"Health check error: {e}", exc_info=True)
+        try:
+            return jsonify({
+                'status': 'error',
+                'message': 'Health check failed',
+                'error': str(e)
+            }), 200
+        except BaseException:
+            # Fallback to ensure valid JSON response
+            return '{"status": "error", "message": "Health check failed"}', 200, {'Content-Type': 'application/json'}
 
 @app.route('/auth/register', methods=['POST'])
 def register():
