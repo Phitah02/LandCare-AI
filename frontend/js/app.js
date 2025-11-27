@@ -1731,7 +1731,13 @@ class LandCareApp {
         this.updateStatus('checking', 'idle', 'Checking backend connection...');
 
         fetch('https://landcare-ai-1.onrender.com/health')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    // Handle 4xx/5xx responses as server errors
+                    throw new Error(`Server error: ${response.status} ${response.statusText}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 console.log('Backend health:', data);
                 if (data.gee_initialized) {
