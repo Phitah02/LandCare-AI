@@ -54,7 +54,7 @@ def initialize_gee():
 
         # Fallback: Try service account with JSON file
         try:
-            json_file_path = os.path.join(os.path.dirname(__file__), 'ee-daudipeterkamau-14e6262536e5.json')
+            json_file_path = os.path.join(os.path.dirname(__file__), 'ee-daudipeterkamau-930c3f6b46e9.json')
             if os.path.exists(json_file_path):
                 print(f"Attempting fallback service account authentication with JSON file: {json_file_path}")
                 credentials = ee.ServiceAccountCredentials(None, json_file_path)
@@ -110,7 +110,7 @@ def initialize_gee():
 
         # Final fallback: Try service account with JSON file
         try:
-            json_file_path = os.path.join(os.path.dirname(__file__), 'ee-daudipeterkamau-14e6262536e5.json')
+            json_file_path = os.path.join(os.path.dirname(__file__), 'ee-daudipeterkamau-930c3f6b46e9.json')
             if os.path.exists(json_file_path):
                 print(f"Attempting final fallback service account authentication with JSON file: {json_file_path}")
                 credentials = ee.ServiceAccountCredentials(None, json_file_path)
