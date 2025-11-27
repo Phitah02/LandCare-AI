@@ -18,7 +18,15 @@ import traceback
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
-CORS(app, origins=['*'], methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'], supports_credentials=False, allow_headers=['Authorization', 'Content-Type', 'X-Requested-With', 'Accept', 'Accept-Encoding', 'Accept-Language', 'Cache-Control', 'Connection', 'Host', 'Origin', 'Referer', 'User-Agent'])
+CORS(app, origins=[
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://landcare-ai-frontend.onrender.com",
+    "https://land-care-ai-dl98.vercel.app"
+], methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'], supports_credentials=False, allow_headers=['Authorization', 'Content-Type', 'X-Requested-With', 'Accept', 'Accept-Encoding', 'Accept-Language', 'Cache-Control', 'Connection', 'Host', 'Origin', 'Referer', 'User-Agent'])
 app.config.from_object(Config)
 
 # Initialize GEE on startup
