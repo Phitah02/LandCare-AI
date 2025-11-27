@@ -1732,19 +1732,22 @@ class LandCareApp {
 
         fetch('https://landcare-ai-1.onrender.com/health')
             .then(response => {
-                if (!response.ok) {
-                    // Handle 4xx/5xx responses as server errors
-                    throw new Error(`Server error: ${response.status} ${response.statusText}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Backend health:', data);
-                if (data.gee_initialized) {
-                    console.log('GEE is initialized');
-                    this.updateStatus('connected', 'idle', 'Connected to backend');
+                if (response.status === 200) {
+                    return response.json().then(data => {
+                        console.log('Backend health:', data);
+                        if (data.gee_initialized) {
+                            console.log('GEE is initialized');
+                            this.updateStatus('connected', 'idle', 'Connected to backend');
+                        } else {
+                            this.updateStatus('connected', 'idle', 'Connected (GEE not initialized)');
+                        }
+                    });
+                } else if (response.status === 500) {
+                    this.updateStatus('disconnected', 'idle', 'Backend error');
+                    this.showError('Backend error occurred.');
                 } else {
-                    this.updateStatus('connected', 'idle', 'Connected (GEE not initialized)');
+                    this.updateStatus('disconnected', 'idle', 'Cannot connect to backend');
+                    this.showError('Cannot connect to backend. Please ensure the server is running.');
                 }
             })
             .catch(error => {
