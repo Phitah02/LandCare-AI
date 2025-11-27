@@ -30,6 +30,28 @@ LandCare AI is a comprehensive multi-section web application for land analysis, 
 - **Responsive Design**: Optimized for desktop and mobile devices.
 - **CTA Footer**: Call-to-action section encouraging user engagement.
 
+## AI & Machine Learning Models
+
+The LandCare project employs two primary machine learning approaches for forecasting vegetation health and weather conditions:
+
+## 1. GEE Random Forest Regression (`backend/ndvi_forecast_ml.py`)
+- **Model**: Random Forest via Google Earth Engine's `ee.Classifier.smileRandomForest`
+- **Type**: Regression
+- **Libraries/Frameworks**: `earthengine-api`, `geemap`
+- **Purpose**: Forecasts NDVI, SAVI, and EVI vegetation indices 3, 6, and 12 months ahead
+- **Features**: Historical vegetation indices (lagged 1, 2, 12 months), meteorological data (precipitation aggregates, temperature, VPD), topographic features (elevation, slope), and soil properties
+- **Contribution**: Provides spatial vegetation health predictions using satellite and environmental data for land management decisions
+
+## 2. ARIMA/SARIMA Time Series Forecasting (`backend/forecasting.py`)
+- **Models**: ARIMA(1,1,1) or SARIMA(1,1,1)(1,1,1,12)
+- **Type**: Time series regression
+- **Libraries/Frameworks**: `statsmodels` (ARIMA, SARIMAX), `pandas`, `numpy`
+- **Purpose**: Forecasts NDVI and weather variables (temperature, rainfall) with confidence intervals
+- **Features**: Historical time series data with caching for performance optimization
+- **Contribution**: Delivers temporal predictions of vegetation indices and weather patterns to support agricultural and environmental planning
+
+These models integrate satellite imagery, meteorological data, and time series analysis to enable proactive land care and resource management in the LandCare application.
+
 ## Screenshots
 
 ### LandCare AI Logo
