@@ -503,8 +503,8 @@ def historical_savi():
 
 
 
-@cross_origin(origins=["https://landcare-ai-frontend.onrender.com"], methods=['GET', 'OPTIONS'], allow_headers=['Authorization', 'Content-Type', 'X-Requested-With', 'Accept', 'Accept-Encoding', 'Accept-Language', 'Cache-Control', 'Connection', 'Host', 'Origin', 'Referer', 'User-Agent'])
 @app.route('/historical/weather/<float:lat>/<float:lon>', methods=['GET'])
+@cross_origin(origins=["https://landcare-ai-frontend.onrender.com"], methods=['GET', 'OPTIONS'], allow_headers=['Authorization', 'Content-Type', 'X-Requested-With', 'Accept', 'Accept-Encoding', 'Accept-Language', 'Cache-Control', 'Connection', 'Host', 'Origin', 'Referer', 'User-Agent'])
 @token_required
 def historical_weather(lat, lon):
     """Get historical weather data for coordinates with caching."""
@@ -738,8 +738,8 @@ async def run_ndvi_forecast_async(task_id, geometry, months, user_id):
 
 
 
-@cross_origin(origins=["https://landcare-ai-frontend.onrender.com"], methods=['GET', 'OPTIONS'], allow_headers=['Authorization', 'Content-Type', 'X-Requested-With', 'Accept', 'Accept-Encoding', 'Accept-Language', 'Cache-Control', 'Connection', 'Host', 'Origin', 'Referer', 'User-Agent'])
 @app.route('/forecast/weather/<float:lat>/<float:lon>', methods=['GET'])
+@cross_origin(origins=["https://landcare-ai-frontend.onrender.com"], methods=['GET', 'OPTIONS'], allow_headers=['Authorization', 'Content-Type', 'X-Requested-With', 'Accept', 'Accept-Encoding', 'Accept-Language', 'Cache-Control', 'Connection', 'Host', 'Origin', 'Referer', 'User-Agent'])
 @token_required
 def forecast_weather_route(lat, lon):
     try:

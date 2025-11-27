@@ -490,7 +490,7 @@ def token_required(f):
 
         # Skip authentication for OPTIONS requests (CORS preflight)
         if request.method == 'OPTIONS':
-            return f(*args, **kwargs)
+            return jsonify({'status': 'ok'}), 200
 
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
