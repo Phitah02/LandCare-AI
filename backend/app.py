@@ -16,19 +16,7 @@ import time
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
-CORS(app, origins=[
-    "http://localhost:5500",
-    "http://127.0.0.1:5500",
-    "http://localhost:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-    "https://landcare-ai-frontend.onrender.com",
-    "https://www.landcare-ai-frontend.onrender.com",
-    "https://land-care-ai-dl98.vercel.app",
-    "https://www.land-care-ai-dl98.vercel.app"
-], methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'], supports_credentials=True, allow_headers=['Authorization', 'Content-Type', 'X-Requested-With', 'Accept', 'Accept-Encoding', 'Accept-Language', 'Cache-Control', 'Connection', 'Host', 'Origin', 'Referer', 'User-Agent'])
+CORS(app, origins=['*'], methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'], supports_credentials=False, allow_headers=['Authorization', 'Content-Type', 'X-Requested-With', 'Accept', 'Accept-Encoding', 'Accept-Language', 'Cache-Control', 'Connection', 'Host', 'Origin', 'Referer', 'User-Agent'])
 app.config.from_object(Config)
 
 # Initialize GEE on startup
@@ -67,10 +55,17 @@ background_tasks = {}
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint."""
-    return jsonify({
-        'status': 'healthy',
-        'gee_initialized': gee_initialized
-    })
+    try:
+        return jsonify({
+            'status': 'healthy',
+            'gee_initialized': gee_initialized
+        })
+    except Exception as e:
+        print(f"Health check error: {e}")
+        return jsonify({
+            'status': 'healthy',
+            'gee_initialized': False
+        })
 
 @app.route('/auth/register', methods=['POST'])
 def register():
