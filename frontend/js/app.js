@@ -1,5 +1,174 @@
 console.log('app.js loaded, creating LandCareApp');
 
+// Toast Notification System
+class Toast {
+    static container = null;
+    static toasts = new Map();
+    static toastCounter = 0;
+
+    static init() {
+        if (!this.container) {
+            this.container = document.getElementById('toast-container');
+            if (!this.container) {
+                console.error('Toast container not found');
+                return;
+            }
+        }
+
+        // Add keyboard event listener for ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.dismissTopToast();
+            }
+        });
+    }
+
+    static show(message, type = 'info', options = {}) {
+        if (!this.container) {
+            this.init();
+        }
+
+        const toastId = ++this.toastCounter;
+        const toastElement = this.createToastElement(message, type, toastId, options);
+
+        // Add to container
+        this.container.appendChild(toastElement);
+
+        // Store reference
+        this.toasts.set(toastId, {
+            element: toastElement,
+            timeoutId: null,
+            options
+        });
+
+        // Trigger animation
+        requestAnimationFrame(() => {
+            toastElement.classList.add('show');
+        });
+
+        // Set up auto-dismiss
+        const duration = options.duration || (type === 'error' ? 6000 : 4000);
+        const timeoutId = setTimeout(() => {
+            this.dismiss(toastId);
+        }, duration);
+
+        this.toasts.get(toastId).timeoutId = timeoutId;
+
+        // Set up hover pause
+        toastElement.addEventListener('mouseenter', () => this.pauseAutoDismiss(toastId));
+        toastElement.addEventListener('mouseleave', () => this.resumeAutoDismiss(toastId));
+
+        return toastId;
+    }
+
+    static success(message, options = {}) {
+        return this.show(message, 'success', options);
+    }
+
+    static error(message, options = {}) {
+        return this.show(message, 'error', options);
+    }
+
+    static createToastElement(message, type, id, options) {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        toast.setAttribute('data-toast-id', id);
+
+        const icon = type === 'success' ? '✓' : '✕';
+        const ariaLabel = type === 'success' ? 'Success notification' : 'Error notification';
+
+        toast.innerHTML = `
+            <span class="toast-icon" aria-hidden="true">${icon}</span>
+            <div class="toast-message">${this.escapeHtml(message)}</div>
+            <button class="toast-close" aria-label="Dismiss ${ariaLabel.toLowerCase()}" title="Dismiss notification">
+                ×
+            </button>
+        `;
+
+        // Add click handler for close button
+        const closeBtn = toast.querySelector('.toast-close');
+        closeBtn.addEventListener('click', () => this.dismiss(id));
+
+        // Add click handler for entire toast (optional)
+        if (options.dismissOnClick !== false) {
+            toast.addEventListener('click', (e) => {
+                if (e.target === closeBtn) return; // Already handled
+                this.dismiss(id);
+            });
+        }
+
+        return toast;
+    }
+
+    static dismiss(toastId) {
+        const toastData = this.toasts.get(toastId);
+        if (!toastData) return;
+
+        const { element, timeoutId } = toastData;
+
+        // Clear timeout
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+
+        // Start hide animation
+        element.classList.remove('show');
+        element.classList.add('hide');
+
+        // Remove after animation
+        setTimeout(() => {
+            if (element.parentNode) {
+                element.parentNode.removeChild(element);
+            }
+            this.toasts.delete(toastId);
+        }, 300); // Match CSS transition duration
+    }
+
+    static dismissTopToast() {
+        const toastIds = Array.from(this.toasts.keys());
+        if (toastIds.length > 0) {
+            this.dismiss(toastIds[toastIds.length - 1]);
+        }
+    }
+
+    static dismissAll() {
+        const toastIds = Array.from(this.toasts.keys());
+        toastIds.forEach(id => this.dismiss(id));
+    }
+
+    static pauseAutoDismiss(toastId) {
+        const toastData = this.toasts.get(toastId);
+        if (toastData && toastData.timeoutId) {
+            clearTimeout(toastData.timeoutId);
+            toastData.timeoutId = null;
+        }
+    }
+
+    static resumeAutoDismiss(toastId) {
+        const toastData = this.toasts.get(toastId);
+        if (!toastData || toastData.timeoutId) return;
+
+        const duration = toastData.options.duration || (toastData.element.classList.contains('error') ? 6000 : 4000);
+        toastData.timeoutId = setTimeout(() => {
+            this.dismiss(toastId);
+        }, duration);
+    }
+
+    static escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+}
+
+// Initialize toast system when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    Toast.init();
+});
+
 // Main application logic
 class LandCareApp {
     constructor() {
@@ -266,6 +435,14 @@ class LandCareApp {
                     console.log('Enter pressed in ROI input');
                     this.searchLocation();
                 }
+            });
+        }
+
+        // Theme toggle button
+        const themeToggle = document.getElementById('theme-toggle');
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                this.toggleTheme();
             });
         }
 
@@ -1400,13 +1577,6 @@ class LandCareApp {
 
     attachForecastingButtons() {
         // Attach event listeners for forecasting buttons
-        const forecastNdviBtn = document.getElementById('forecast-ndvi');
-        if (forecastNdviBtn) {
-            forecastNdviBtn.addEventListener('click', () => {
-                this.forecastNDVI();
-            });
-        }
-
         const forecastWeatherBtn = document.getElementById('forecast-weather');
         if (forecastWeatherBtn) {
             forecastWeatherBtn.addEventListener('click', () => {
@@ -1590,15 +1760,7 @@ class LandCareApp {
     showSuccess(message) {
         // Show success toast/notification
         console.log('Success:', message);
-        // You can implement a toast notification here
-        const notification = document.createElement('div');
-        notification.className = 'notification success';
-        notification.textContent = message;
-        document.body.appendChild(notification);
-        
-        setTimeout(() => {
-            notification.remove();
-        }, 3000);
+        Toast.success(message);
     }
 
     updateLandCoverDisplay(landCoverData) {
@@ -2312,77 +2474,6 @@ class LandCareApp {
         }
     }
 
-    async forecastNDVI() {
-        if (!this.authToken) {
-            this.showError('You must be logged in to perform forecasting');
-            this.openAuthModal(true);
-            return;
-        }
-
-        if (!this.mapHandler.currentPolygon) {
-            this.showError('No polygon drawn. Please draw a polygon first.');
-            return;
-        }
-
-        try {
-            this.updateStatus(this.currentStatus.connection, 'forecasting', 'Generating vegetation forecast...');
-
-            // First get historical data for forecasting
-            const geometry = this.mapHandler.currentPolygonLayer.toGeoJSON().geometry;
-            const historicalMonths = parseInt(document.getElementById('forecast-historical-months-select')?.value) || 12;
-            const historicalResponse = await fetch('https://landcare-ai-1.onrender.com/historical/vis', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.authToken}`
-                },
-                body: JSON.stringify({
-                    geometry: geometry,
-                    months: historicalMonths  // Use selected months for forecasting
-                })
-            });
-
-            const historicalData = await historicalResponse.json();
-            if (!historicalResponse.ok) {
-                throw new Error('Failed to get historical data for forecasting');
-            }
-
-            // Now forecast
-            const months = parseInt(document.getElementById('forecast-months-select')?.value) || 12; // Get from UI or default to 12
-
-            // Transform historical data to match forecast function expectations
-            const historicalForForecast = {
-                dates: historicalData.dates,
-                values: historicalData.ndvi_values
-            };
-
-            const forecastResponse = await fetch('https://landcare-ai-1.onrender.com/forecast/vis', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.authToken}`
-                },
-                body: JSON.stringify({
-                    historical_ndvi: historicalForForecast,
-                    months: months,
-                    geometry: geometry
-                })
-            });
-
-            const forecastData = await forecastResponse.json();
-            if (!forecastResponse.ok) {
-                throw new Error(forecastData.error || 'Forecasting failed');
-            }
-
-            this.displayNDVIForecast(forecastData);
-            this.updateStatus(this.currentStatus.connection, 'idle', 'Forecast completed');
-            this.showSuccess('VIs forecast completed successfully!');
-        } catch (error) {
-            this.updateStatus(this.currentStatus.connection, 'idle', 'Forecast failed');
-            this.showError(`NDVI forecast error: ${error.message}`);
-            console.error('NDVI forecast error:', error);
-        }
-    }
 
     async forecastWeather() {
         if (!this.authToken) {
@@ -2464,19 +2555,6 @@ class LandCareApp {
         this.renderD3HistoricalWeatherChart('historical-weather-chart', data);
     }
 
-    displayNDVIForecast(data) {
-        // Switch to forecasting tab and display data
-        this.switchToTab('forecasting');
-
-        // Update forecast info
-        if (data.metadata) {
-            document.getElementById('forecast-period').textContent = `${data.metadata.parameters.periods} months`;
-            document.getElementById('forecast-model').textContent = data.metadata.model;
-            document.getElementById('forecast-confidence').textContent = data.metadata.parameters.confidence_intervals ? '95%' : 'N/A';
-        }
-
-        this.renderForecastChart('forecast-ndvi-chart', data.forecast_dates, data.forecast_values, data.confidence_intervals, 'VIs Forecast');
-    }
 
     displayWeatherForecast(data) {
         // Switch to forecasting tab and display data
@@ -2922,204 +3000,6 @@ class LandCareApp {
     }
 
 
-    renderForecastChart(containerId, dates, values, confidenceIntervals, title) {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-
-        // Destroy existing chart if it exists
-        if (this.chartJsCharts && this.chartJsCharts[containerId]) {
-            this.chartJsCharts[containerId].destroy();
-        }
-
-        // Create or get canvas element
-        let canvas = container.querySelector('canvas');
-        if (!canvas) {
-            canvas = document.createElement('canvas');
-            container.appendChild(canvas);
-        }
-
-        // Get theme colors
-        const themeColors = this.getChartThemeColors();
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-
-        // Prepare data
-        const chartData = dates.map((date, i) => ({
-            x: new Date(date),
-            y: parseFloat(values[i]),
-            lower: confidenceIntervals && confidenceIntervals.lower ? parseFloat(confidenceIntervals.lower[i]) : null,
-            upper: confidenceIntervals && confidenceIntervals.upper ? parseFloat(confidenceIntervals.upper[i]) : null
-        }));
-
-        // Build datasets array
-        const datasets = [];
-        
-        // Add confidence interval area if available
-        if (chartData.some(d => d.lower !== null && d.upper !== null)) {
-            datasets.push({
-                label: 'Confidence Upper',
-                data: chartData.map(d => ({ x: d.x, y: d.upper })),
-                borderColor: 'transparent',
-                backgroundColor: this.hexToRgba(themeColors.orange, 0.3),
-                fill: '+1',
-                pointRadius: 0,
-                order: 2
-            });
-            datasets.push({
-                label: 'Confidence Lower',
-                data: chartData.map(d => ({ x: d.x, y: d.lower })),
-                borderColor: 'transparent',
-                backgroundColor: this.hexToRgba(themeColors.orange, 0.3),
-                fill: false,
-                pointRadius: 0,
-                order: 1
-            });
-        }
-
-        // Add main forecast line
-        datasets.push({
-            label: title.replace(' Forecast', ''),
-            data: chartData.map(d => ({ x: d.x, y: d.y })),
-            borderColor: themeColors.orange,
-            backgroundColor: themeColors.orange,
-            borderWidth: 2,
-            pointRadius: 3,
-            pointBackgroundColor: themeColors.orange,
-            pointBorderColor: isDark ? '#fff' : '#000',
-            pointBorderWidth: 1,
-            tension: 0.4,
-            order: 3
-        });
-
-        // Create Chart.js configuration
-        const ctx = canvas.getContext('2d');
-        const chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                datasets: datasets
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: title,
-                        color: themeColors.textColor,
-                        font: {
-                            size: 16,
-                            weight: 'bold'
-                        }
-                    },
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: {
-                            color: themeColors.textColor,
-                            filter: (item) => item.text !== 'Confidence Upper' && item.text !== 'Confidence Lower',
-                            generateLabels: (chart) => {
-                                const hasConfidence = chartData.some(d => d.lower !== null);
-                                const labels = [];
-                                if (hasConfidence) {
-                                    labels.push({
-                                        text: 'Confidence Interval',
-                                        fillStyle: this.hexToRgba(themeColors.orange, 0.3),
-                                        strokeStyle: this.hexToRgba(themeColors.orange, 0.5),
-                                        lineWidth: 1
-                                    });
-                                }
-                                labels.push({
-                                    text: title.replace(' Forecast', ''),
-                                    fillStyle: themeColors.orange,
-                                    strokeStyle: themeColors.orange,
-                                    lineWidth: 2
-                                });
-                                return labels;
-                            }
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)',
-                        titleColor: themeColors.textColor,
-                        bodyColor: themeColors.textColor,
-                        borderColor: themeColors.gridColor,
-                        borderWidth: 1,
-                        callbacks: {
-                            title: (context) => {
-                                return new Date(context[0].parsed.x).toLocaleDateString();
-                            },
-                            label: (context) => {
-                                const index = context.dataIndex;
-                                const value = context.parsed.y;
-                                if (context.datasetIndex === datasets.length - 1) {
-                                    let tooltipText = `${title.replace(' Forecast', '')}: ${value.toFixed(3)}`;
-                                    if (chartData[index].lower !== null && chartData[index].upper !== null) {
-                                        tooltipText += `\nConfidence: ${chartData[index].lower.toFixed(3)} - ${chartData[index].upper.toFixed(3)}`;
-                                        tooltipText += `\nUncertainty: ±${((chartData[index].upper - chartData[index].lower) / 2).toFixed(3)}`;
-                                    }
-                                    tooltipText += `\nForecast Type: ${title}`;
-                                    return tooltipText.split('\n');
-                                }
-                                return '';
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: {
-                            unit: 'month',
-                            displayFormats: {
-                                month: 'MMM yyyy'
-                            }
-                        },
-                        title: {
-                            display: true,
-                            text: 'Date',
-                            color: themeColors.textColor,
-                            font: {
-                                size: 12,
-                                weight: 'bold'
-                            }
-                        },
-                        ticks: {
-                            color: themeColors.textColor,
-                            maxTicksLimit: 10
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        }
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                            text: 'NDVI',
-                            color: themeColors.textColor,
-                            font: {
-                                size: 12,
-                                weight: 'bold'
-                            }
-                        },
-                        ticks: {
-                            color: themeColors.textColor
-                        },
-                        grid: {
-                            color: themeColors.gridColor
-                        },
-                        beginAtZero: false
-                    }
-                },
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                }
-            }
-        });
-
-        // Store chart instance
-        if (!this.chartJsCharts) this.chartJsCharts = {};
-        this.chartJsCharts[containerId] = chart;
-    }
 
     renderMultiTimeSeriesChart(containerId, dates, seriesData, yLabel, title) {
         const container = document.getElementById(containerId);
@@ -3642,7 +3522,6 @@ class LandCareApp {
             'futureErosionChart': 'Future Soil Erosion Risk',
             'historical-ndvi-chart': 'Historical Vegetation Indices',
             'historical-weather-chart': 'Historical Weather Data',
-            'forecast-ndvi-chart': 'Forecasted Vegetation Indices',
             'forecast-weather-chart': 'Forecasted Weather Data',
             'ml-forecast-chart': 'ML Vegetation Forecast',
             'ml-feature-importance-chart': 'Feature Importance Analysis'
@@ -4789,15 +4668,7 @@ class LandCareApp {
     showError(message) {
         // Show error toast/notification
         console.error('Error:', message);
-        // You can implement a toast notification here
-        const notification = document.createElement('div');
-        notification.className = 'notification error';
-        notification.textContent = message;
-        document.body.appendChild(notification);
-
-        setTimeout(() => {
-            notification.remove();
-        }, 5000);
+        Toast.error(message);
     }
 }
 

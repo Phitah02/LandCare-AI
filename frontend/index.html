@@ -92,6 +92,9 @@
         </div>
     </div>
 
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>
+
     <main id="app">
         <section id="hero" class="hero-section">
             <div class="hero-content">
@@ -318,22 +321,8 @@
                             </div>
 
                             <div id="forecasting-tab" class="tab-content">
-                                <h4>Forecasting</h4>
+                                <h4>Weather Forecasting</h4>
                                 <div class="forecasting-controls">
-                                    <div class="control-group">
-                                        <label for="forecast-historical-months-select">Historical VIs (months):</label>
-                                        <select id="forecast-historical-months-select">
-                                            <option value="6">6 months</option>
-                                            <option value="12" selected>12 months</option>
-                                        </select>
-                                        <label for="forecast-months-select">Forecast Period (months):</label>
-                                        <select id="forecast-months-select">
-                                            <option value="3">3 months</option>
-                                            <option value="6">6 months</option>
-                                            <option value="12" selected>12 months</option>
-                                        </select>
-                                        <button id="forecast-ndvi" class="btn btn-secondary">Forecast VIs</button>
-                                    </div>
                                     <div class="control-group">
                                         <label for="forecast-days-select">Forecast Period (days):</label>
                                         <select id="forecast-days-select">
@@ -350,14 +339,6 @@
                                 <div class="chart-container">
                                     <div class="chart-with-controls">
                                         <div class="chart-controls">
-                                            <button class="export-btn export-png" data-chart="forecast-ndvi-chart" title="Export as PNG">📷 PNG</button>
-                                            <button class="export-btn export-svg" data-chart="forecast-ndvi-chart" title="Export as SVG">📊 SVG</button>
-                                            <button class="export-btn export-csv" data-chart="forecast-ndvi-chart" title="Export as CSV">📄 CSV</button>
-                                        </div>
-                                        <div id="forecast-ndvi-chart" style="width: 400px; height: 200px;" aria-label="Forecasted Vegetation Indices Chart"></div>
-                                    </div>
-                                    <div class="chart-with-controls">
-                                        <div class="chart-controls">
                                             <button class="export-btn export-png" data-chart="forecast-weather-chart" title="Export as PNG">📷 PNG</button>
                                             <button class="export-btn export-svg" data-chart="forecast-weather-chart" title="Export as SVG">📊 SVG</button>
                                             <button class="export-btn export-csv" data-chart="forecast-weather-chart" title="Export as CSV">📄 CSV</button>
@@ -368,21 +349,21 @@
                                 <div class="forecast-info">
                                     <div class="stat-card">
                                         <h4>Forecast Period</h4>
-                                        <div class="stat-value" id="forecast-period">12 months</div>
+                                        <div class="stat-value" id="forecast-period">5 days</div>
                                     </div>
                                     <div class="stat-card">
                                         <h4>Model Type</h4>
-                                        <div class="stat-value" id="forecast-model">ARIMA/SARIMA</div>
+                                        <div class="stat-value" id="forecast-model">Weather API</div>
                                     </div>
                                     <div class="stat-card">
                                         <h4>Confidence Level</h4>
-                                        <div class="stat-value" id="forecast-confidence">95%</div>
+                                        <div class="stat-value" id="forecast-confidence">Simple bounds</div>
                                     </div>
                                 </div>
                             </div>
 
                             <div id="ml-forecasting-tab" class="tab-content">
-                                <h4>ML Forecasting</h4>
+                                <h4>VIs ML Forecasting</h4>
                                 <div class="ml-forecasting-controls">
                                     <div class="control-group">
                                         <label for="ml-forecast-period-select">Forecast Period (months):</label>
