@@ -3,6 +3,27 @@ import geemap
 from config.config import Config
 import datetime
 import numpy as np
+import hashlib
+
+def get_geometry_seed(geometry):
+    """Generate a deterministic seed based on geometry coordinates for consistent mock data."""
+    # Convert geometry to string for hashing
+    geom_str = str(geometry['coordinates'])
+    # Create a hash and convert to integer seed
+    seed = int(hashlib.md5(geom_str.encode()).hexdigest(), 16) % (2**32)
+    return seed
+
+def get_geometry_params(geometry):
+    """Extract parameters from geometry for mock data generation."""
+    coords = geometry['coordinates'][0] if isinstance(geometry['coordinates'][0][0], list) else geometry['coordinates']
+
+    lats = [c[1] for c in coords]
+    lons = [c[0] for c in coords]
+
+    lat_center = sum(lats) / len(lats)
+    lon_center = sum(lons) / len(lons)
+
+    return lat_center, lon_center
 
 def initialize_gee():
     """Initialize Google Earth Engine with prioritized authentication based on environment.
@@ -289,13 +310,30 @@ def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
             gee_initialized = False
 
         if not gee_initialized:
-            # Return mock historical data
+            # Return mock historical data - geometry-dependent
             dates = []
             values = []
             current = start
+
+            # Get geometry parameters for deterministic mock data
+            lat_center, lon_center = get_geometry_params(geometry)
+            seed = get_geometry_seed(geometry)
+            np.random.seed(seed)
+
+            # Base NDVI varies with latitude (higher in tropics)
+            base_ndvi = 0.4 + 0.2 * (abs(lat_center) / 90)  # Higher NDVI in equatorial regions
+            amplitude = 0.25 + 0.1 * np.sin(lat_center * np.pi / 180)  # Seasonal variation
+            phase_shift = lon_center * np.pi / 180  # Longitude affects seasonal timing
+
             while current <= end:
                 dates.append(current.strftime('%Y-%m-%d'))
-                values.append(0.5 + 0.3 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+                # Geometry-dependent NDVI with seasonal pattern
+                seasonal_component = amplitude * np.sin((current.month - 1) * np.pi / 6 + phase_shift)
+                noise = np.random.normal(0, 0.08)
+                ndvi_value = base_ndvi + seasonal_component + noise
+                # Clamp to realistic NDVI range
+                ndvi_value = max(-1, min(1, ndvi_value))
+                values.append(ndvi_value)
                 current += datetime.timedelta(days=30)  # Monthly intervals
             return {
                 'dates': dates,
@@ -388,7 +426,7 @@ def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
         return result
 
     except Exception as e:
-        # Return mock data on error
+        # Return mock data on error - geometry-dependent
         dates = []
         values = []
         try:
@@ -398,9 +436,26 @@ def get_historical_ndvi(geometry, start_date='1984-01-01', end_date=None):
             # Use default dates if parsing fails
             current = datetime.datetime(1984, 1, 1)
             end_dt = datetime.datetime.now()
+
+        # Get geometry parameters for deterministic mock data
+        lat_center, lon_center = get_geometry_params(geometry)
+        seed = get_geometry_seed(geometry)
+        np.random.seed(seed)
+
+        # Base NDVI varies with latitude (higher in tropics)
+        base_ndvi = 0.4 + 0.2 * (abs(lat_center) / 90)  # Higher NDVI in equatorial regions
+        amplitude = 0.25 + 0.1 * np.sin(lat_center * np.pi / 180)  # Seasonal variation
+        phase_shift = lon_center * np.pi / 180  # Longitude affects seasonal timing
+
         while current <= end_dt:
             dates.append(current.strftime('%Y-%m-%d'))
-            values.append(0.5 + 0.3 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+            # Geometry-dependent NDVI with seasonal pattern
+            seasonal_component = amplitude * np.sin((current.month - 1) * np.pi / 6 + phase_shift)
+            noise = np.random.normal(0, 0.08)
+            ndvi_value = base_ndvi + seasonal_component + noise
+            # Clamp to realistic NDVI range
+            ndvi_value = max(-1, min(1, ndvi_value))
+            values.append(ndvi_value)
             current += datetime.timedelta(days=30)
         return {
             'dates': dates,
@@ -431,13 +486,30 @@ def get_historical_evi(geometry, start_date='1984-01-01', end_date=None):
             gee_initialized = False
 
         if not gee_initialized:
-            # Return mock historical data
+            # Return mock historical data - geometry-dependent
             dates = []
             values = []
             current = start
+
+            # Get geometry parameters for deterministic mock data
+            lat_center, lon_center = get_geometry_params(geometry)
+            seed = get_geometry_seed(geometry)
+            np.random.seed(seed)
+
+            # Base EVI varies with latitude (higher in tropics)
+            base_evi = 0.3 + 0.2 * (abs(lat_center) / 90)  # Higher EVI in equatorial regions
+            amplitude = 0.2 + 0.1 * np.sin(lat_center * np.pi / 180)  # Seasonal variation
+            phase_shift = lon_center * np.pi / 180  # Longitude affects seasonal timing
+
             while current <= end:
                 dates.append(current.strftime('%Y-%m-%d'))
-                values.append(0.35 + 0.25 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.08))
+                # Geometry-dependent EVI with seasonal pattern
+                seasonal_component = amplitude * np.sin((current.month - 1) * np.pi / 6 + phase_shift)
+                noise = np.random.normal(0, 0.08)
+                evi_value = base_evi + seasonal_component + noise
+                # Clamp to realistic EVI range
+                evi_value = max(-1, min(1, evi_value))
+                values.append(evi_value)
                 current += datetime.timedelta(days=30)  # Monthly intervals
             return {
                 'dates': dates,
@@ -546,9 +618,25 @@ def get_historical_evi(geometry, start_date='1984-01-01', end_date=None):
             # Use default dates if parsing fails
             current = datetime.datetime(1984, 1, 1)
             end_dt = datetime.datetime.now()
+        # Get geometry parameters for deterministic mock data
+        lat_center, lon_center = get_geometry_params(geometry)
+        seed = get_geometry_seed(geometry)
+        np.random.seed(seed)
+
+        # Base EVI varies with latitude (higher in tropics)
+        base_evi = 0.3 + 0.2 * (abs(lat_center) / 90)  # Higher EVI in equatorial regions
+        amplitude = 0.2 + 0.1 * np.sin(lat_center * np.pi / 180)  # Seasonal variation
+        phase_shift = lon_center * np.pi / 180  # Longitude affects seasonal timing
+
         while current <= end_dt:
             dates.append(current.strftime('%Y-%m-%d'))
-            values.append(0.35 + 0.25 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.08))
+            # Geometry-dependent EVI with seasonal pattern
+            seasonal_component = amplitude * np.sin((current.month - 1) * np.pi / 6 + phase_shift)
+            noise = np.random.normal(0, 0.08)
+            evi_value = base_evi + seasonal_component + noise
+            # Clamp to realistic EVI range
+            evi_value = max(-1, min(1, evi_value))
+            values.append(evi_value)
             current += datetime.timedelta(days=30)
         return {
             'dates': dates,
@@ -579,13 +667,30 @@ def get_historical_savi(geometry, start_date='1984-01-01', end_date=None, L=0.5)
             gee_initialized = False
 
         if not gee_initialized:
-            # Return mock historical data
+            # Return mock historical data - geometry-dependent
             dates = []
             values = []
             current = start
+
+            # Get geometry parameters for deterministic mock data
+            lat_center, lon_center = get_geometry_params(geometry)
+            seed = get_geometry_seed(geometry)
+            np.random.seed(seed)
+
+            # Base SAVI varies with latitude (higher in tropics)
+            base_savi = 0.5 + 0.2 * (abs(lat_center) / 90)  # Higher SAVI in equatorial regions
+            amplitude = 0.3 + 0.1 * np.sin(lat_center * np.pi / 180)  # Seasonal variation
+            phase_shift = lon_center * np.pi / 180  # Longitude affects seasonal timing
+
             while current <= end:
                 dates.append(current.strftime('%Y-%m-%d'))
-                values.append(0.45 + 0.35 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+                # Geometry-dependent SAVI with seasonal pattern
+                seasonal_component = amplitude * np.sin((current.month - 1) * np.pi / 6 + phase_shift)
+                noise = np.random.normal(0, 0.08)
+                savi_value = base_savi + seasonal_component + noise
+                # Clamp to realistic SAVI range
+                savi_value = max(-1, min(1, savi_value))
+                values.append(savi_value)
                 current += datetime.timedelta(days=30)  # Monthly intervals
             return {
                 'dates': dates,
@@ -683,7 +788,7 @@ def get_historical_savi(geometry, start_date='1984-01-01', end_date=None, L=0.5)
         return result
 
     except Exception as e:
-        # Return mock data on error
+        # Return mock data on error - geometry-dependent
         dates = []
         values = []
         try:
@@ -693,9 +798,26 @@ def get_historical_savi(geometry, start_date='1984-01-01', end_date=None, L=0.5)
             # Use default dates if parsing fails
             current = datetime.datetime(1984, 1, 1)
             end_dt = datetime.datetime.now()
+
+        # Get geometry parameters for deterministic mock data
+        lat_center, lon_center = get_geometry_params(geometry)
+        seed = get_geometry_seed(geometry)
+        np.random.seed(seed)
+
+        # Base SAVI varies with latitude (higher in tropics)
+        base_savi = 0.5 + 0.2 * (abs(lat_center) / 90)  # Higher SAVI in equatorial regions
+        amplitude = 0.3 + 0.1 * np.sin(lat_center * np.pi / 180)  # Seasonal variation
+        phase_shift = lon_center * np.pi / 180  # Longitude affects seasonal timing
+
         while current <= end_dt:
             dates.append(current.strftime('%Y-%m-%d'))
-            values.append(0.45 + 0.35 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+            # Geometry-dependent SAVI with seasonal pattern
+            seasonal_component = amplitude * np.sin((current.month - 1) * np.pi / 6 + phase_shift)
+            noise = np.random.normal(0, 0.08)
+            savi_value = base_savi + seasonal_component + noise
+            # Clamp to realistic SAVI range
+            savi_value = max(-1, min(1, savi_value))
+            values.append(savi_value)
             current += datetime.timedelta(days=30)
         return {
             'dates': dates,
@@ -973,18 +1095,53 @@ def get_historical_vis(geometry, start_date='1984-01-01', end_date=None):
             gee_initialized = False
 
         if not gee_initialized:
-            # Return mock historical data
+            # Return mock historical data - geometry-dependent
             dates = []
             ndvi_values = []
             evi_values = []
             savi_values = []
             current = datetime.datetime.strptime(start_date, '%Y-%m-%d')
             end = datetime.datetime.strptime(end_date or datetime.datetime.now().strftime('%Y-%m-%d'), '%Y-%m-%d')
+
+            # Get geometry parameters for deterministic mock data
+            lat_center, lon_center = get_geometry_params(geometry)
+            seed = get_geometry_seed(geometry)
+            np.random.seed(seed)
+
+            # Base values vary with latitude (higher in tropics)
+            base_ndvi = 0.4 + 0.2 * (abs(lat_center) / 90)  # Higher NDVI in equatorial regions
+            base_evi = 0.3 + 0.2 * (abs(lat_center) / 90)   # Higher EVI in equatorial regions
+            base_savi = 0.5 + 0.2 * (abs(lat_center) / 90)  # Higher SAVI in equatorial regions
+
+            # Seasonal variation amplitudes
+            ndvi_amplitude = 0.25 + 0.1 * np.sin(lat_center * np.pi / 180)
+            evi_amplitude = 0.2 + 0.1 * np.sin(lat_center * np.pi / 180)
+            savi_amplitude = 0.3 + 0.1 * np.sin(lat_center * np.pi / 180)
+
+            # Longitude affects seasonal timing
+            phase_shift = lon_center * np.pi / 180
+
             while current <= end:
                 dates.append(current.strftime('%Y-%m-15'))
-                ndvi_values.append(0.5 + 0.3 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
-                evi_values.append(0.35 + 0.25 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.08))
-                savi_values.append(0.45 + 0.35 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+                # Geometry-dependent VI values with seasonal patterns
+                ndvi_seasonal = ndvi_amplitude * np.sin((current.month - 1) * np.pi / 6 + phase_shift)
+                ndvi_noise = np.random.normal(0, 0.08)
+                ndvi_value = base_ndvi + ndvi_seasonal + ndvi_noise
+                ndvi_value = max(-1, min(1, ndvi_value))  # Clamp to realistic range
+                ndvi_values.append(ndvi_value)
+
+                evi_seasonal = evi_amplitude * np.sin((current.month - 1) * np.pi / 6 + phase_shift)
+                evi_noise = np.random.normal(0, 0.08)
+                evi_value = base_evi + evi_seasonal + evi_noise
+                evi_value = max(-1, min(1, evi_value))  # Clamp to realistic range
+                evi_values.append(evi_value)
+
+                savi_seasonal = savi_amplitude * np.sin((current.month - 1) * np.pi / 6 + phase_shift)
+                savi_noise = np.random.normal(0, 0.08)
+                savi_value = base_savi + savi_seasonal + savi_noise
+                savi_value = max(-1, min(1, savi_value))  # Clamp to realistic range
+                savi_values.append(savi_value)
+
                 if current.month == 12:
                     current = current.replace(year=current.year + 1, month=1)
                 else:
@@ -1152,7 +1309,7 @@ def get_historical_vis(geometry, start_date='1984-01-01', end_date=None):
         return result
 
     except Exception as e:
-        # Return mock data on error
+        # Return mock data on error - geometry-dependent
         dates = []
         ndvi_values = []
         evi_values = []
@@ -1165,11 +1322,46 @@ def get_historical_vis(geometry, start_date='1984-01-01', end_date=None):
             # Use default dates if parsing fails
             current = datetime.datetime(1984, 1, 1)
             end = datetime.datetime.now()
+
+        # Get geometry parameters for deterministic mock data
+        lat_center, lon_center = get_geometry_params(geometry)
+        seed = get_geometry_seed(geometry)
+        np.random.seed(seed)
+
+        # Base values vary with latitude (higher in tropics)
+        base_ndvi = 0.4 + 0.2 * (abs(lat_center) / 90)  # Higher NDVI in equatorial regions
+        base_evi = 0.3 + 0.2 * (abs(lat_center) / 90)   # Higher EVI in equatorial regions
+        base_savi = 0.5 + 0.2 * (abs(lat_center) / 90)  # Higher SAVI in equatorial regions
+
+        # Seasonal variation amplitudes
+        ndvi_amplitude = 0.25 + 0.1 * np.sin(lat_center * np.pi / 180)
+        evi_amplitude = 0.2 + 0.1 * np.sin(lat_center * np.pi / 180)
+        savi_amplitude = 0.3 + 0.1 * np.sin(lat_center * np.pi / 180)
+
+        # Longitude affects seasonal timing
+        phase_shift = lon_center * np.pi / 180
+
         while current <= end:
             dates.append(current.strftime('%Y-%m-15'))
-            ndvi_values.append(0.5 + 0.3 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
-            evi_values.append(0.35 + 0.25 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.08))
-            savi_values.append(0.45 + 0.35 * np.sin(current.month * np.pi / 6) + np.random.normal(0, 0.1))
+            # Geometry-dependent VI values with seasonal patterns
+            ndvi_seasonal = ndvi_amplitude * np.sin((current.month - 1) * np.pi / 6 + phase_shift)
+            ndvi_noise = np.random.normal(0, 0.08)
+            ndvi_value = base_ndvi + ndvi_seasonal + ndvi_noise
+            ndvi_value = max(-1, min(1, ndvi_value))  # Clamp to realistic range
+            ndvi_values.append(ndvi_value)
+
+            evi_seasonal = evi_amplitude * np.sin((current.month - 1) * np.pi / 6 + phase_shift)
+            evi_noise = np.random.normal(0, 0.08)
+            evi_value = base_evi + evi_seasonal + evi_noise
+            evi_value = max(-1, min(1, evi_value))  # Clamp to realistic range
+            evi_values.append(evi_value)
+
+            savi_seasonal = savi_amplitude * np.sin((current.month - 1) * np.pi / 6 + phase_shift)
+            savi_noise = np.random.normal(0, 0.08)
+            savi_value = base_savi + savi_seasonal + savi_noise
+            savi_value = max(-1, min(1, savi_value))  # Clamp to realistic range
+            savi_values.append(savi_value)
+
             if current.month == 12:
                 current = current.replace(year=current.year + 1, month=1)
             else:
