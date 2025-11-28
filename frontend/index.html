@@ -362,7 +362,7 @@
                                             <button class="export-btn export-svg" data-chart="forecast-weather-chart" title="Export as SVG">📊 SVG</button>
                                             <button class="export-btn export-csv" data-chart="forecast-weather-chart" title="Export as CSV">📄 CSV</button>
                                         </div>
-                                        <div id="forecast-weather-chart" style="width: 400px; height: 200px;" aria-label="Forecasted Weather Data Chart"></div>
+                                        <div id="forecast-weather-chart" style="width: 100%; min-width: 500px; height: 400px; min-height: 350px;" aria-label="Forecasted Weather Data Chart"></div>
                                     </div>
                                 </div>
                                 <div class="forecast-info">
@@ -549,7 +549,8 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="js/map-handler.js"></script>
     <script src="js/app.js"></script>
 </body>
