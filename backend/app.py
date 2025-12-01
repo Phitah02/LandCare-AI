@@ -256,14 +256,14 @@ def analyze():
         return jsonify({'error': str(e)}), 500
 
 @cross_origin(origins=["https://landcare-ai-frontend.onrender.com"])
-@app.route('/weather/<float:lat>/<float:lon>', methods=['GET'])
+@app.route('/weather/<float:lat>/<float:lon>', methods=['GET', 'OPTIONS'])
 def weather(lat, lon):
     """Get current weather for coordinates."""
     weather_data = get_weather_data(lat, lon)
     return jsonify(weather_data)
 
 @cross_origin(origins=["https://landcare-ai-frontend.onrender.com"])
-@app.route('/forecast/<float:lat>/<float:lon>', methods=['GET'])
+@app.route('/forecast/<float:lat>/<float:lon>', methods=['GET', 'OPTIONS'])
 def forecast(lat, lon):
     """Get weather forecast for coordinates."""
     forecast_data = get_weather_forecast(lat, lon)
@@ -503,7 +503,7 @@ def historical_savi():
 
 
 
-@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['GET'])
+@app.route('/historical/weather/<float:lat>/<float:lon>', methods=['GET', 'OPTIONS'])
 @cross_origin(origins=["https://landcare-ai-frontend.onrender.com"], methods=['GET', 'OPTIONS'], allow_headers=['Authorization', 'Content-Type', 'X-Requested-With', 'Accept', 'Accept-Encoding', 'Accept-Language', 'Cache-Control', 'Connection', 'Host', 'Origin', 'Referer', 'User-Agent'])
 @token_required
 def historical_weather(lat, lon):
@@ -738,7 +738,7 @@ async def run_ndvi_forecast_async(task_id, geometry, months, user_id):
 
 
 
-@app.route('/forecast/weather/<float:lat>/<float:lon>', methods=['GET'])
+@app.route('/forecast/weather/<float:lat>/<float:lon>', methods=['GET', 'OPTIONS'])
 @cross_origin(origins=["https://landcare-ai-frontend.onrender.com"], methods=['GET', 'OPTIONS'], allow_headers=['Authorization', 'Content-Type', 'X-Requested-With', 'Accept', 'Accept-Encoding', 'Accept-Language', 'Cache-Control', 'Connection', 'Host', 'Origin', 'Referer', 'User-Agent'])
 @token_required
 def forecast_weather_route(lat, lon):
