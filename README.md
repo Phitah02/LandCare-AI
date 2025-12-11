@@ -1,12 +1,12 @@
 # LandCare AI - Land Analysis Platform
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
-[![Flask](https://img.shields.io/badge/Flask-2.0+-red.svg)](https://flask.palletsprojects.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-green.svg)](https://fastapi.tiangolo.com/)
 [![ML Ready](https://img.shields.io/badge/ML-Ready-green.svg)]()
 [![GEE Integration](https://img.shields.io/badge/GEE-Integrated-blue.svg)]()
 [![Phase 5](https://img.shields.io/badge/Phase-5%20Testing-orange.svg)]()
 
-## Overview
+## 1. Project Overview
 
 LandCare AI is a comprehensive multi-section web application for land analysis, featuring a modern, user-friendly interface with dedicated sections for introduction, features, interactive exploration, future predictions, and calls to action. Users must authenticate to access analysis features. The platform provides detailed insights including multiple vegetation indices (NDVI, EVI, SAVI), land cover classification, slope analysis, comprehensive risk assessment, historical trends analysis, and advanced forecasting using both statistical (ARIMA/SARIMA) and machine learning (Random Forest) models powered by Google Earth Engine (GEE), Open-Meteo APIs, and sophisticated ML pipelines for NDVI forecasting. A sophisticated caching system ensures optimal performance for repeated analyses.
 
@@ -30,6 +30,22 @@ LandCare AI is a comprehensive multi-section web application for land analysis, 
 - **Responsive Design**: Optimized for desktop and mobile devices.
 - **CTA Footer**: Call-to-action section encouraging user engagement.
 
+### Migration from Flask to FastAPI
+
+The LandCare AI project has recently undergone a significant migration from Flask to FastAPI to leverage modern async capabilities, automatic API documentation, and improved performance. Key migration highlights:
+
+- **Framework Transition**: Migrated from monolithic Flask application (`app_flask_legacy.py`) to modular FastAPI application with router-based architecture
+- **API Structure**: Implemented RESTful API design with automatic OpenAPI/Swagger documentation generation
+- **Async Support**: Leveraged FastAPI's native async/await support for improved concurrency and performance
+- **Type Safety**: Added Pydantic models for request/response validation and automatic documentation
+- **Dependency Injection**: Implemented FastAPI's dependency injection system for cleaner code organization
+- **CORS Handling**: Updated CORS middleware configuration for better security and flexibility
+- **Router Organization**: Modularized endpoints into separate router files (auth, analysis, weather, historical, etc.)
+- **Background Tasks**: Enhanced background task processing using FastAPI's background task capabilities
+- **Performance Improvements**: Reduced response times and improved concurrent request handling
+
+The legacy Flask application remains available as `backend/app_flask_legacy.py` for reference and gradual migration validation.
+
 ## AI & Machine Learning Models
 
 The LandCare project employs two primary machine learning approaches for forecasting vegetation health and weather conditions:
@@ -52,59 +68,26 @@ The LandCare project employs two primary machine learning approaches for forecas
 
 These models integrate satellite imagery, meteorological data, and time series analysis to enable proactive land care and resource management in the LandCare application.
 
-## Screenshots
-
-### LandCare AI Logo
-<img src="frontend/assets/LandCare%20AI%20logo.png" alt="LandCare AI Logo" width="300">
-
-### Profile Image
-<img src="frontend/assets/profile-image.png" alt="Profile Image" width="300">
-
-### Historical Analysis
-<img src="screenshots/historical%20analysis.png" alt="Historical Analysis" width="800">
-*Historical Analysis Page*
-
-### Home Page
-<img src="screenshots/home%20page.jpeg" alt="Home Page" width="800">
-*Home Page*
-
-### Login Page
-<img src="screenshots/login%20page.png" alt="Login Page" width="800">
-*Login Page*
-### Core Functionality
-- **User Authentication**: JWT-based authentication system with secure password hashing.
-- **Interactive Map**: Users draw polygons using Leaflet.js and Leaflet.Draw on the frontend.
-- **Analysis**: Backend processes GeoJSON polygons via Flask API with comprehensive data processing and caching.
-- **Integrations**:
-  - Google Earth Engine for NDVI, EVI, SAVI, land cover, slope, and historical satellite data.
-  - Open-Meteo for current weather, historical weather, and forecasting (free API with CC BY 4.0 license).
-  - ERA5 dataset (via GEE) for long-term climate data.
-  - Supabase for data storage, user management, and caching.
-- **Machine Learning**: ARIMA time series forecasting for vegetation and weather predictions.
-- **Visualization**: Results displayed in tabbed panels with metrics, charts, risk indicators, and early warnings.
-
-## Architecture
-
-```mermaid
-graph TD
-    A[User] --> B[Frontend<br/>Leaflet.js]
-    B --> C[Backend<br/>Flask API]
-    C --> D[Google Earth Engine]
-    C --> E[Open-Meteo]
-    C --> F[Supabase Database]
-    D --> G[Satellite & Vegetation Data]
-    E --> H[Weather Data]
-    F --> I[User Data & Analysis Results]
-```
-
-## Project Structure
+## 2. Project Structure
 ```
 LandCare/
 ├── backend/
-│   ├── app.py                          # Main Flask application with authentication and ML endpoints
+│   ├── main.py                         # Main FastAPI application with lifespan management
+│   ├── app_flask_legacy.py             # Legacy Flask application (preserved for reference)
 │   ├── config/
 │   │   ├── __init__.py
-│   │   └── config.py                   # Configuration settings
+│   │   ├── config.py                   # Legacy configuration (Flask-based)
+│   │   └── settings.py                 # FastAPI settings with Pydantic
+│   ├── routes/                         # FastAPI router modules
+│   │   ├── __init__.py
+│   │   ├── analysis.py                 # Analysis endpoints (NDVI, EVI, SAVI, land cover)
+│   │   ├── auth.py                     # Authentication endpoints (login, register, JWT)
+│   │   ├── forecasting.py              # ML forecasting endpoints
+│   │   ├── historical.py               # Historical data endpoints
+│   │   ├── models.py                   # ML model management endpoints
+│   │   ├── tasks.py                    # Background task management
+│   │   ├── utility.py                  # Utility endpoints (health, geocoding)
+│   │   └── weather.py                  # Weather data endpoints
 │   ├── gee_processor.py                # GEE integration for vegetation indices, land cover, slope
 │   ├── ndvi_forecast_ml.py             # ML forecasting with Random Forest models (GEE integration)
 │   ├── weather_integration.py          # Open-Meteo and ERA5 weather data integration
@@ -118,7 +101,7 @@ LandCare/
 │   ├── test_insert.py                  # Database insertion tests
 │   ├── test_integration_ml.py          # ML integration tests
 │   ├── test_ndvi_forecast_ml.py        # NDVI ML forecasting tests
-│   ├── requirements.txt                # Python dependencies
+│   ├── requirements.txt                # Python dependencies (updated for FastAPI)
 │   ├── runtime.txt                     # Python runtime version specification
 │   ├── ee-daudipeterkamau-14e6262536e5.json # GEE service account credentials (gitignored)
 │   ├── temp.json                       # Temporary data file
@@ -147,7 +130,44 @@ LandCare/
 └── ML.md                               # ML integration documentation
 ```
 
-## Development Progress
+## 3. Project Architecture
+
+```mermaid
+graph TD
+    A[User] --> B[Frontend<br/>Leaflet.js]
+    B --> C[Backend<br/>FastAPI]
+    C --> D[Google Earth Engine]
+    C --> E[Open-Meteo]
+    C --> F[Supabase Database]
+    D --> G[Satellite & Vegetation Data]
+    E --> H[Weather Data]
+    F --> I[User Data & Analysis Results]
+```
+
+### Core Functionality
+- **User Authentication**: JWT-based authentication system with secure password hashing.
+- **Interactive Map**: Users draw polygons using Leaflet.js and Leaflet.Draw on the frontend.
+- **Analysis**: Backend processes GeoJSON polygons via FastAPI with comprehensive data processing and caching.
+- **Integrations**:
+  - Google Earth Engine for NDVI, EVI, SAVI, land cover, slope, and historical satellite data.
+  - Open-Meteo for current weather, historical weather, and forecasting (free API with CC BY 4.0 license).
+  - ERA5 dataset (via GEE) for long-term climate data.
+  - Supabase for data storage, user management, and caching.
+- **Machine Learning**: ARIMA time series forecasting for vegetation and weather predictions.
+- **Visualization**: Results displayed in tabbed panels with metrics, charts, risk indicators, and early warnings.
+
+### FastAPI Router Architecture
+The backend is organized into modular routers for better maintainability:
+- **auth.py**: User authentication and JWT token management
+- **analysis.py**: Core vegetation analysis endpoints
+- **weather.py**: Weather data retrieval and forecasting
+- **historical.py**: Historical data processing with caching
+- **forecasting.py**: ML and statistical forecasting
+- **models.py**: ML model management and training
+- **tasks.py**: Background task processing
+- **utility.py**: Health checks, geocoding, and utilities
+
+## 4. Development Progress
 
 ### Integration Phases (Completed)
 - ✅ **Phase 1**: Backend Integration (Week 1-2) - Modular ML functions, database updates, basic API endpoints
@@ -172,7 +192,7 @@ The `test_performance_ml.py` script provides comprehensive benchmarking:
 - **Results output**: Timestamped JSON files (`performance_test_results_YYYYMMDD_HHMMSS.json`)
 - **Execution**: `cd backend && python test_performance_ml.py`
 
-## Database Schema
+### Database Schema
 
 The application uses Supabase with the following tables (prefixed with `landcare_` in the public schema):
 
@@ -191,7 +211,7 @@ The application uses Supabase with the following tables (prefixed with `landcare
 
 Row Level Security (RLS) is enabled on all tables except users, with policies ensuring users can only access their own data. Indexes are created for optimal query performance.
 
-## Setup Instructions
+## 5. Setup Instructions
 
 ### 1. Prerequisites
 - Python 3.8+
@@ -201,7 +221,7 @@ Row Level Security (RLS) is enabled on all tables except users, with policies en
 
 ### 2. Environment Setup
 
-#### Backend (Python/Flask)
+#### Backend (Python/FastAPI)
 1. Navigate to the backend directory:
    ```
    cd backend
@@ -240,8 +260,8 @@ Row Level Security (RLS) is enabled on all tables except users, with policies en
      - Go to Settings > API to get your project URL and anon key.
      - Set `SUPABASE_URL=https://your-project.supabase.co`.
      - Set `SUPABASE_KEY=your_anon_key_here`.
-     - Run the SQL schema from `database/schema.sql` in your Supabase SQL editor.
-   - Generate a strong `SECRET_KEY` for Flask (use `python -c "import secrets; print(secrets.token_hex(16))"`).
+     - Run the SQL schema from `database/landcare_public_schema.sql` in your Supabase SQL editor.
+   - Generate a strong `SECRET_KEY` for FastAPI JWT tokens (use `python -c "import secrets; print(secrets.token_hex(16))"`).
 
 #### Frontend
 - No build step required. The frontend is static HTML/CSS/JS.
@@ -253,14 +273,15 @@ Row Level Security (RLS) is enabled on all tables except users, with policies en
    ```
    cd backend
    # Ensure venv is activated
-   python app.py
+   uvicorn main:app --reload --host 0.0.0.0 --port 8000
    ```
-   - The server runs on `http://localhost:5000`.
-   - Check health: Visit `http://localhost:5000/health` (should show `{"status": "healthy", "gee_initialized": true}`).
+   - The server runs on `http://localhost:8000`.
+   - API documentation available at `http://localhost:8000/docs` (Swagger UI) and `http://localhost:8000/redoc` (ReDoc).
+   - Check health: Visit `http://localhost:8000/health` (should show `{"status": "healthy", "gee_initialized": true}`).
 
 2. Open the frontend:
    - Navigate to `frontend/index.html` in your browser (or use `python -m http.server 8000` in the root and visit `http://localhost:8000/frontend/index.html`).
-   - The app will connect to the backend at `http://localhost:5000`.
+   - The app will connect to the backend at `http://localhost:8000`.
 
 ### 4. Usage
 1. **Authentication**: Start by creating an account or logging in using the buttons in the navigation bar.
@@ -298,7 +319,7 @@ Row Level Security (RLS) is enabled on all tables except users, with policies en
 
 8. **Footer**: Click "Be part of the solution" to return to the explore section.
 
-### 5. Testing
+## 6. Testing
 
 #### Performance Testing
 - **ML Performance Benchmarking**: Run comprehensive performance tests for ML components:
@@ -323,7 +344,7 @@ Row Level Security (RLS) is enabled on all tables except users, with policies en
 - **API Calls**: Test authenticated endpoints with sample GeoJSON via Postman or curl.
    Example analysis request:
    ```bash
-   curl -X POST http://localhost:5000/analyze \
+   curl -X POST http://localhost:8000/analyze \
    -H "Content-Type: application/json" \
    -H "Authorization: Bearer YOUR_JWT_TOKEN" \
    -d '{"geometry": {"type": "Polygon", "coordinates": [[[0,0],[0,1],[1,1],[1,0],[0,0]]]}}'
@@ -334,65 +355,20 @@ Row Level Security (RLS) is enabled on all tables except users, with policies en
 - **ML Forecasting**: Test NDVI forecasting with both statistical (ARIMA) and ML (Random Forest) models.
 - **Database Operations**: Verify all CRUD operations and Row Level Security (RLS) policies.
 
-### 6. Troubleshooting
+## 7. Troubleshooting & Development
+
+### Troubleshooting
 - **GEE Errors**: Verify service account has Earth Engine access. Run `python -c "import ee; ee.Authenticate();"` for testing.
-- **CORS Issues**: Flask-CORS is enabled; ensure backend runs on port 5000.
+- **CORS Issues**: FastAPI CORS middleware is configured; ensure backend runs on port 8000.
 - **Map Not Loading**: Check browser console for Leaflet CDN issues.
 - **No Results**: Ensure polygon is valid and within GEE data coverage (e.g., not over oceans).
+- **API Documentation**: Access Swagger UI at `http://localhost:8000/docs` or ReDoc at `http://localhost:8000/redoc` for endpoint testing.
 
-### 7. Development
-- Backend: Use `FLASK_ENV=development` for debug mode.
-- Frontend: Edit JS/CSS and refresh the browser.
-- Authentication: JWT-based user system with secure password hashing.
-- Caching: Historical data and ML models cached for performance (30-day and 7-day expiration respectively).
-- Testing: Run authentication and database tests with provided test files.
-- Add features: Enhance forecasting models, add more vegetation indices, implement real-time monitoring.
-
-## Deployment
-
-### Live Website
-- **Production**: https://landcare-ai-frontend.onrender.com
-- **Staging**: https://land-care-ai-dl98.vercel.app
-
-### Deployment Instructions
-- **Backend**: Deploy Flask to Heroku, Vercel, or Google Cloud Run. Set environment variables securely.
-- **Frontend**: Host static files on Netlify, Vercel, or GitHub Pages.
-- **Database**: Supabase handles user data and analysis storage automatically.
-
-## Contributing
-1. Fork the repository.
-2. Create a feature branch.
-3. Make changes and test.
-4. Submit a pull request.
-
-## Author
-Peter Kamau Mwaura
-
-GitHub: [@Phitah02](https://github.com/Phitah02)
-LinkedIn: [Peter Kamau Mwaura](https://www.linkedin.com/in/peter-kamau-mwaura-aa748b241)
-
-## Last Updated
-26th November 2025
-
-## Security and Configuration
-
-### Environment Variables
-- **`.env.example`**: Template for required environment variables
-- **`.env`**: Local configuration (gitignored for security)
-- **GEE Credentials**: `ee-daudipeterkamau-14e6262536e5.json` (service account key, gitignored)
-- **Supabase**: Database URL and API keys
-- **JWT Secret**: Secure token generation
-
-### Git Ignore Configuration
-The `.gitignore` file excludes:
-- Sensitive credentials (`ee-daudipeterkamau-14e6262536e5.json`, `.env`)
-- Temporary files (`temp.json`, `test_geometry.json`)
-- ML model outputs (`performance_test_results_*.json`, `models/`)
-- Python cache and virtual environments
-- IDE and OS-specific files
-
-## License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Contact
-For questions, open an issue or contact the maintainer.
+### Development
+- **Backend**: Use `uvicorn main:app --reload` for development with auto-reload.
+- **Frontend**: Edit JS/CSS and refresh the browser.
+- **Authentication**: JWT-based user system with secure password hashing using python-jose.
+- **Caching**: Historical data and ML models cached for performance (30-day and 7-day expiration respectively).
+- **Testing**: Run authentication and database tests with provided test files using `pytest`.
+- **API Development**: Leverage FastAPI's automatic OpenAPI documentation and Pydantic validation.
+- **Add Features**: Enhance forecasting models, add more vegetation indices, implement real-time monitoring.
