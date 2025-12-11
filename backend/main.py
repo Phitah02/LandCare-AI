@@ -66,19 +66,22 @@ app.add_middleware(
 # Import routers
 from routes.analysis import router as analysis_router
 from routes.forecasting import router as forecasting_router
+from routes.auth import router as auth_router
+from routes.weather import router as weather_router
+from routes.historical import router as historical_router
+from routes.models import router as models_router
+from routes.tasks import router as tasks_router
+from routes.utility import router as utility_router
 
 # Include routers with prefixes and tags
-app.include_router(analysis_router, prefix="/api", tags=["Analysis"])
+app.include_router(analysis_router, tags=["Analysis"])
 app.include_router(forecasting_router, prefix="/api/forecast", tags=["Forecasting"])
-
-
-@app.get("/health", tags=["Health"])
-async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "gee_initialized": gee_initialized
-    }
+app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+app.include_router(weather_router, tags=["Weather"])
+app.include_router(historical_router, prefix="/historical", tags=["Historical"])
+app.include_router(models_router, prefix="/api/models", tags=["Models"])
+app.include_router(tasks_router, tags=["Tasks"])
+app.include_router(utility_router, tags=["Utility"])
 
 
 if __name__ == "__main__":

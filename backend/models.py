@@ -10,7 +10,6 @@ import bcrypt
 from functools import wraps
 import pandas as pd
 import numpy as np
-from flask import make_response, jsonify
 
 class Database:
     def __init__(self):
@@ -481,30 +480,3 @@ def generate_token(user_id: str, email: str) -> str:
         'exp': datetime.utcnow() + timedelta(days=7)  # Token expires in 7 days
     }
     return jwt.encode(payload, Config.SECRET_KEY, algorithm='HS256')
-
-def token_required(f):
-    """Decorator to require authentication token."""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        from flask import request
-
-        # Skip authentication for OPTIONS requests (CORS preflight)
-        if request.method == 'OPTIONS':
-            return jsonify({'status': 'ok'}), 200
-
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': 'Missing or invalid authorization header'}), 401
-
-        token = auth_header.split(' ')[1]
-        try:
-            payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
-            request.user_id = payload['user_id']
-            request.user_email = payload['email']
-        except jwt.ExpiredSignatureError:
-            return jsonify({'error': 'Token has expired'}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({'error': 'Invalid token'}), 401
-
-        return f(*args, **kwargs)
-    return decorated_function

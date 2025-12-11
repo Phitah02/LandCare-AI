@@ -22,7 +22,7 @@ def initialize_gee():
         os.environ.get('DISPLAY') is None or  # No display (headless)
         os.environ.get('RENDER') is not None or  # Render deployment
         os.environ.get('CI') is not None or  # CI environment
-        Config.FLASK_ENV == 'production' or  # Production environment
+        Config.APP_ENV == 'production' or  # Production environment
         os.environ.get('GITHUB_ACTIONS') is not None  # GitHub Actions
     )
 

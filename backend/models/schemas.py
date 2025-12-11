@@ -143,6 +143,17 @@ class VegetationForecastRequest(BaseModel):
     use_fallback: bool = True
 
 
+class HistoricalNDVI(BaseModel):
+    dates: List[str]
+    values: List[float]
+
+
+class VegetationIndexForecastRequest(BaseModel):
+    historical_ndvi: HistoricalNDVI
+    months: int = Field(12, le=12, ge=1)
+    geometry: Optional[Geometry] = None
+
+
 class TaskStatusResponse(BaseModel):
     task_id: str
     status: str

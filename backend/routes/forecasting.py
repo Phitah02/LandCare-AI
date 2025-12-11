@@ -2,12 +2,14 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from typing import Dict, Any
+import pandas as pd
 
-from models.schemas import VegetationForecastRequest, TaskStatusResponse
+from models.schemas import VegetationForecastRequest, TaskStatusResponse, VegetationIndexForecastRequest
 from auth.dependencies import get_current_user
 from ndvi_forecast_ml import GEEForecaster
 from gee_processor import initialize_gee
 from models import db
+from forecasting import forecast_ndvi
 
 router = APIRouter()
 
@@ -156,3 +158,41 @@ async def get_forecast_status(
         response['duration'] = task['end_time'] - task['start_time']
 
     return response
+
+
+@router.post("/vis")
+async def forecast_vis(
+    request: VegetationIndexForecastRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Forecast vegetation indices using statistical models."""
+    try:
+        historical_ndvi = request.historical_ndvi.dict()
+        months = request.months
+        user_id = current_user['user_id']
+        geometry = request.geometry.dict() if request.geometry else None
+
+        geometry_hash = db.generate_geometry_hash(geometry) if geometry else None
+
+        forecast_data = forecast_ndvi(historical_ndvi, months, geometry_hash, use_sarima=True)
+
+        if 'error' not in forecast_data:
+            forecast_data['metadata'] = {
+                'model': 'SARIMA',
+                'run_date': pd.Timestamp.now().isoformat(),
+                'parameters': {
+                    'periods': months,
+                    'confidence_intervals': True
+                },
+                'source': 'Historical Vegetation Indices data'
+            }
+
+        try:
+            db.save_forecast(user_id, geometry, forecast_data)
+        except Exception as db_error:
+            print(f"Database save error: {db_error}")
+
+        return forecast_data
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

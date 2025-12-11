@@ -24,22 +24,22 @@ import asyncio
 import time
 from datetime import datetime, timedelta
 
-# Mock token_required before importing app
-def mock_token_required(f):
-    """Mock token_required decorator that sets user_id on request."""
-    def mock_wrapper(*args, **kwargs):
-        # Set user_id on the request object
-        from flask import request
-        request.user_id = 'test_user_123'
-        request.user_email = 'test@example.com'
-        return f(*args, **kwargs)
-    # Preserve the original function name to avoid Flask conflicts
-    mock_wrapper.__name__ = f.__name__
-    return mock_wrapper
+# Set environment variables for testing
+os.environ['DEBUG'] = 'true'
+os.environ['SECRET_KEY'] = 'test_secret'
+os.environ['SUPABASE_URL'] = 'test_url'
+os.environ['SUPABASE_KEY'] = 'test_key'
+os.environ['GOOGLE_CLIENT_EMAIL'] = 'test@example.com'
+os.environ['GOOGLE_PRIVATE_KEY'] = 'test_key'
+# Override any existing DEBUG setting
+os.environ['DEBUG'] = 'true'
 
-with mock.patch('models.token_required', mock_token_required):
-    # Import Flask app and required modules
-    from app import app, background_tasks
+# Mock Supabase client creation before importing anything that uses it
+with mock.patch('supabase.create_client', return_value=mock.MagicMock()):
+    # Import FastAPI app and required modules
+    from fastapi.testclient import TestClient
+    from main import app
+    from routes.tasks import background_tasks_store as background_tasks
     from models import db
 
 # Test database setup
@@ -89,9 +89,7 @@ class TestIntegrationML(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures before each test method."""
         self.app = app
-        self.app.config['TESTING'] = True
-        self.app.config['SECRET_KEY'] = 'test_secret_key'
-        self.client = self.app.test_client()
+        self.client = TestClient(self.app)
 
         # Use test database
         self.test_db = TestDatabase()
@@ -106,16 +104,22 @@ class TestIntegrationML(unittest.TestCase):
 
         # Mock external dependencies
         self.patches = [
-            mock.patch('app.db', self.test_db),
+            mock.patch('models.Database', return_value=self.test_db),
             mock.patch('models.db', self.test_db),
-            mock.patch('app.initialize_gee', return_value=True),
-            mock.patch('app.get_historical_ndvi', self._mock_get_historical_ndvi),
-            mock.patch('app.get_historical_evi', self._mock_get_historical_evi),
-            mock.patch('app.get_historical_savi', self._mock_get_historical_savi),
-            mock.patch('app.forecast_ndvi', self._mock_forecast_ndvi),
-            mock.patch('app.GEEForecaster', self._mock_gee_forecaster),
+            mock.patch('routes.models.db', self.test_db),
+            mock.patch('routes.tasks.db', self.test_db),
+            mock.patch('routes.forecasting.db', self.test_db),
+            mock.patch('gee_processor.initialize_gee', return_value=True),
+            mock.patch('gee_processor.get_historical_ndvi', self._mock_get_historical_ndvi),
+            mock.patch('gee_processor.get_historical_evi', self._mock_get_historical_evi),
+            mock.patch('gee_processor.get_historical_savi', self._mock_get_historical_savi),
+            mock.patch('forecasting.forecast_ndvi', self._mock_forecast_ndvi),
             mock.patch('ndvi_forecast_ml.GEEForecaster', self._mock_gee_forecaster),
+            mock.patch('routes.models.GEEForecaster', self._mock_gee_forecaster),
+            mock.patch('routes.tasks.GEEForecaster', self._mock_gee_forecaster),
             mock.patch('asyncio.create_task', self._mock_create_task),
+            # Mock the auth dependency to return test user
+            mock.patch('auth.dependencies.get_current_user', return_value={'user_id': self.test_user_id, 'email': 'test@example.com'}),
         ]
 
         for patch in self.patches:

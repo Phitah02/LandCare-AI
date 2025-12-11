@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     supabase_key: str = Field(..., env="SUPABASE_KEY")
 
     # Google Earth Engine
-    gee_service_account: str = Field(..., env="GOOGLE_CLIENT_EMAIL")
-    gee_private_key: str = Field(..., env="GOOGLE_PRIVATE_KEY")
+    gee_service_account: str = Field(default="test@example.com", env="GOOGLE_CLIENT_EMAIL")
+    gee_private_key: str = Field(default="test_key", env="GOOGLE_PRIVATE_KEY")
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra='ignore')
 

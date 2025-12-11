@@ -22,9 +22,23 @@ import tempfile
 import shutil
 from datetime import datetime, timedelta
 
-# Import Flask app and required modules
-from app import app, background_tasks
-from models import db
+# Set environment variables for testing
+os.environ['DEBUG'] = 'true'
+os.environ['SECRET_KEY'] = 'test_secret'
+os.environ['SUPABASE_URL'] = 'test_url'
+os.environ['SUPABASE_KEY'] = 'test_key'
+os.environ['GOOGLE_CLIENT_EMAIL'] = 'test@example.com'
+os.environ['GOOGLE_PRIVATE_KEY'] = 'test_key'
+# Override any existing DEBUG setting
+os.environ['DEBUG'] = 'true'
+
+# Mock Supabase client creation before importing anything that uses it
+with mock.patch('supabase.create_client', return_value=mock.MagicMock()):
+    # Import FastAPI app and required modules
+    from fastapi.testclient import TestClient
+    from main import app
+    from routes.tasks import background_tasks_store as background_tasks
+    from models import db
 
 
 class TestMLAPIEndpoints(unittest.TestCase):
@@ -33,8 +47,7 @@ class TestMLAPIEndpoints(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures before each test method."""
         self.app = app
-        self.app.config['TESTING'] = True
-        self.client = self.app.test_client()
+        self.client = TestClient(self.app)
 
         # Mock database and external dependencies
         self.mock_db = mock.MagicMock()
@@ -47,18 +60,24 @@ class TestMLAPIEndpoints(unittest.TestCase):
 
         # Mock external modules
         self.patches = [
-            mock.patch('app.db', self.mock_db),
-            mock.patch('app.initialize_gee', return_value=True),
-            mock.patch('app.get_historical_ndvi'),
-            mock.patch('app.get_historical_evi'),
-            mock.patch('app.get_historical_savi'),
-            mock.patch('app.get_historical_vis'),
-            mock.patch('app.forecast_ndvi'),
-            mock.patch('app.get_weather_data'),
-            mock.patch('app.get_weather_forecast'),
-            mock.patch('app.GEEForecaster'),
-            mock.patch('app.run_vegetation_forecast_async'),
-            mock.patch('app.run_model_training_async'),
+            mock.patch('models.Database', return_value=self.mock_db),
+            mock.patch('models.db', self.mock_db),
+            mock.patch('routes.models.db', self.mock_db),
+            mock.patch('routes.tasks.db', self.mock_db),
+            mock.patch('routes.forecasting.db', self.mock_db),
+            mock.patch('gee_processor.initialize_gee', return_value=True),
+            mock.patch('gee_processor.get_historical_ndvi'),
+            mock.patch('gee_processor.get_historical_evi'),
+            mock.patch('gee_processor.get_historical_savi'),
+            mock.patch('gee_processor.get_historical_vis'),
+            mock.patch('forecasting.forecast_ndvi'),
+            mock.patch('weather_integration.get_weather_data'),
+            mock.patch('weather_integration.get_weather_forecast'),
+            mock.patch('ndvi_forecast_ml.GEEForecaster'),
+            mock.patch('routes.forecasting.run_vegetation_forecast_async'),
+            mock.patch('routes.models.run_model_training_async'),
+            # Mock the auth dependency to return test user
+            mock.patch('auth.dependencies.get_current_user', return_value={'user_id': 'test_user_123', 'email': 'test@example.com'}),
         ]
 
         for patch in self.patches:
