@@ -2491,7 +2491,7 @@ class LandCareApp {
             const centroid = this.mapHandler.getPolygonCentroid(this.mapHandler.currentPolygonLayer.toGeoJSON().geometry);
             const days = parseInt(document.getElementById('forecast-days-select')?.value) || 5; // Get from UI or default to 5
 
-            const response = await fetch(`https://landcare-ai-1.onrender.com/forecast/weather/${centroid[0]}/${centroid[1]}?days=${days}`, {
+            const response = await fetch(`https://landcare-ai-1.onrender.com/forecast/${centroid[0]}/${centroid[1]}?days=${days}`, {
                 headers: {
                     'Authorization': `Bearer ${this.authToken}`
                 }
