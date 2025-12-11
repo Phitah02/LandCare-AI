@@ -372,3 +372,50 @@ Row Level Security (RLS) is enabled on all tables except users, with policies en
 - **Testing**: Run authentication and database tests with provided test files using `pytest`.
 - **API Development**: Leverage FastAPI's automatic OpenAPI documentation and Pydantic validation.
 - **Add Features**: Enhance forecasting models, add more vegetation indices, implement real-time monitoring.
+
+### Live Website
+- **Production**: https://landcare-ai-frontend.onrender.com
+- **Staging**: https://land-care-ai-dl98.vercel.app
+
+### Deployment Instructions
+- **Backend**: Deploy FastAPI to Heroku, Vercel, or Google Cloud Run. Set environment variables securely.
+- **Frontend**: Host static files on Netlify, Vercel, or GitHub Pages.
+- **Database**: Supabase handles user data and analysis storage automatically.
+
+## Contributing
+1. Fork the repository.
+2. Create a feature branch.
+3. Make changes and test.
+4. Submit a pull request.
+
+## Author
+Peter Kamau Mwaura
+
+GitHub: [@Phitah02](https://github.com/Phitah02)
+LinkedIn: [Peter Kamau Mwaura](https://www.linkedin.com/in/peter-kamau-mwaura-aa748b241)
+
+## Last Updated
+26th November 2025
+
+## Security and Configuration
+
+### Environment Variables
+- **`.env.example`**: Template for required environment variables
+- **`.env`**: Local configuration (gitignored for security)
+- **GEE Credentials**: `ee-daudipeterkamau-14e6262536e5.json` (service account key, gitignored)
+- **Supabase**: Database URL and API keys
+- **JWT Secret**: Secure token generation
+
+### Git Ignore Configuration
+The `.gitignore` file excludes:
+- Sensitive credentials (`ee-daudipeterkamau-14e6262536e5.json`, `.env`)
+- Temporary files (`temp.json`, `test_geometry.json`)
+- ML model outputs (`performance_test_results_*.json`, `models/`)
+- Python cache and virtual environments
+- IDE and OS-specific files
+
+## License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Contact
+For questions, open an issue or contact the maintainer
