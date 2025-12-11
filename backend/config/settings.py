@@ -4,12 +4,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 from typing import List
+import secrets
 
 
 class Settings(BaseSettings):
     app_name: str = Field(default="LandCare AI", env="APP_NAME")
     debug: bool = Field(default=False, env="DEBUG")
-    secret_key: str = Field(..., env="SECRET_KEY")
+    secret_key: str = Field(default_factory=lambda: secrets.token_hex(32), env="SECRET_KEY")
 
     # CORS
     cors_origins: List[str] = Field(default=["http://localhost:3000", "http://localhost:5000"], env="CORS_ORIGINS")
