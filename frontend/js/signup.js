@@ -181,7 +181,7 @@ class SignupPage {
                 }, 1500);
             } else {
                 console.error('Signup failed with status', response.status, ':', data);
-                this.showError(data.error || data.message || `Signup failed (${response.status}). Please try again.`);
+                this.showError(data.error || data.detail || data.message || `Signup failed (${response.status}). Please try again.`);
             }
         } catch (error) {
             console.error('Signup error:', error);

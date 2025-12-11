@@ -114,7 +114,7 @@ class LoginPage {
                     window.location.href = 'index.html';
                 }, 1500);
             } else {
-                this.showError(data.error || data.message || 'Login failed. Please check your credentials.');
+                this.showError(data.error || data.detail || data.message || 'Login failed. Please check your credentials.');
             }
         } catch (error) {
             console.error('Login error:', error);

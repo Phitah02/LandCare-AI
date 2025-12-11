@@ -260,7 +260,7 @@ class LandCareApp {
                 this.closeAuthModal();
                 this.showSuccess('Login successful!');
             } else {
-                throw new Error(data.error || 'Login failed');
+                throw new Error(data.error || data.detail || 'Login failed');
             }
         } catch (error) {
             this.showError(error.message);
@@ -292,7 +292,7 @@ class LandCareApp {
                 this.closeAuthModal();
                 this.showSuccess('Registration successful!');
             } else {
-                throw new Error(data.error || 'Registration failed');
+                throw new Error(data.error || data.detail || 'Registration failed');
             }
         } catch (error) {
             this.showError(error.message);
@@ -532,7 +532,7 @@ class LandCareApp {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Analysis failed');
+                throw new Error(data.error || data.detail || 'Analysis failed');
             }
 
             this.currentResults = data;
@@ -885,7 +885,7 @@ class LandCareApp {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Geocoding failed');
+                throw new Error(data.error || data.detail || 'Geocoding failed');
             }
 
             // Center map on the found location
@@ -2314,7 +2314,7 @@ class LandCareApp {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to load historical VIs');
+                throw new Error(data.error || data.detail || 'Failed to load historical VIs');
             }
 
             this.displayHistoricalNDVI(data);
@@ -2455,7 +2455,7 @@ class LandCareApp {
                 } else if (response.status === 504 || response.status === 408) {
                     throw new Error('Request timed out. Please try with a smaller date range.');
                 } else {
-                    throw new Error(data.error || 'Failed to load historical weather');
+                    throw new Error(data.error || data.detail || 'Failed to load historical weather');
                 }
             }
 
@@ -2500,7 +2500,7 @@ class LandCareApp {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Weather forecasting failed');
+                throw new Error(data.error || data.detail || 'Weather forecasting failed');
             }
 
             this.displayWeatherForecast(data);
