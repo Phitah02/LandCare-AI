@@ -515,8 +515,9 @@ class LandCareApp {
                 analyzeBtn.textContent = 'Analyzing...';
             }
             const geometry = this.mapHandler.currentPolygonLayer.toGeoJSON().geometry;
-            const centroid = this.mapHandler.getPolygonCentroid(geometry);
-
+            const centroidArray = this.mapHandler.getPolygonCentroid(geometry);
+            const centroid = { lat: centroidArray[0], lon: centroidArray[1] };
+    
             const response = await fetch('https://landcare-ai-1.onrender.com/analyze', {
                 method: 'POST',
                 headers: {
