@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     secret_key: str = Field(default_factory=lambda: secrets.token_hex(32), env="SECRET_KEY")
 
     # CORS
-    cors_origins: List[str] = Field(default=["http://localhost:3000", "http://localhost:5000"], env="CORS_ORIGINS")
+    cors_origins: List[str] = Field(default=["http://localhost:3000", "http://localhost:5000", "https://landcare-ai-frontend.onrender.com", "https://land-care-ai-dl98.vercel.app"], env="CORS_ORIGINS")
 
     # Supabase
     supabase_url: str = Field(..., env="SUPABASE_URL")
