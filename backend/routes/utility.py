@@ -8,7 +8,7 @@ from datetime import datetime
 from models.schemas import GeocodeRequest, GeocodeResponse, HealthResponse
 from auth.dependencies import get_current_user
 from gee_processor import initialize_gee
-from models import db
+from database import db
 
 router = APIRouter()
 

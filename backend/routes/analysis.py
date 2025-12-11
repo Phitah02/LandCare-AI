@@ -8,7 +8,7 @@ from models.schemas import AnalysisRequest, AnalysisResponse
 from auth.dependencies import get_current_user
 from gee_processor import get_ndvi, get_evi, get_savi, get_land_cover, get_slope_data, calculate_risk_score
 from weather_integration import get_weather_data
-from models import db
+from database import db
 
 router = APIRouter()
 

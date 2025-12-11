@@ -5,7 +5,7 @@ from typing import Dict, Any
 
 from models.schemas import UserCreate, UserLogin, TokenResponse, UserResponse
 from auth.dependencies import get_current_user, create_access_token
-from models import db
+from database import db
 
 router = APIRouter()
 

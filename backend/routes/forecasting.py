@@ -8,7 +8,7 @@ from models.schemas import VegetationForecastRequest, TaskStatusResponse, Vegeta
 from auth.dependencies import get_current_user
 from ndvi_forecast_ml import GEEForecaster
 from gee_processor import initialize_gee
-from models import db
+from database import db
 from forecasting import forecast_ndvi
 
 router = APIRouter()

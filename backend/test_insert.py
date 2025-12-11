@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test database insert."""
 
-from models import db
+from database import db
 import json
 
 def test_insert():

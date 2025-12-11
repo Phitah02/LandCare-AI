@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test database connection and tables."""
 
-from models import db
+from database import db
 
 def test_database():
     """Test database connection and tables."""

@@ -7,7 +7,7 @@ import math
 from weather_integration import get_weather_data, get_weather_forecast, get_historical_weather
 from forecasting import forecast_ndvi, forecast_weather
 from ndvi_forecast_ml import GEEForecaster
-from models import db, generate_token, token_required
+from database import db, generate_token, token_required
 import json
 import requests
 import pandas as pd

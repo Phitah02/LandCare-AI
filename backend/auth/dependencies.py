@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from config.settings import settings
-from models import db
+from database import db
 
 security = HTTPBearer()
 

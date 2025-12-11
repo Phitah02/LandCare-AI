@@ -40,7 +40,7 @@ with mock.patch('supabase.create_client', return_value=mock.MagicMock()):
     from fastapi.testclient import TestClient
     from main import app
     from routes.tasks import background_tasks_store as background_tasks
-    from models import db
+    from database import db
 
 # Test database setup
 class TestDatabase:

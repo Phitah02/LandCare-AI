@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from auth.dependencies import get_current_user
 from gee_processor import initialize_gee
 from ndvi_forecast_ml import GEEForecaster
-from models import db
+from database import db
 
 router = APIRouter()
 

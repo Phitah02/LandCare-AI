@@ -10,7 +10,7 @@ from auth.dependencies import get_current_user
 from forecasting import forecast_ndvi
 from gee_processor import initialize_gee, get_historical_ndvi
 from ndvi_forecast_ml import GEEForecaster
-from models import db
+from database import db
 
 router = APIRouter()
 

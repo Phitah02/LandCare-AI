@@ -41,7 +41,7 @@ def forecast_ndvi(historical_ndvi, periods=12, geometry_hash=None, use_sarima=Fa
         # Try to get cached model
         cached_model = None
         if model_key:
-            from models import db
+            from database import db
             cached_model = db.get_cached_arima_model(model_key)
 
         if cached_model:
@@ -134,7 +134,7 @@ def forecast_weather(historical_weather, variable='temperature', periods=12, loc
         # Try to get cached model
         cached_model = None
         if model_key:
-            from models import db
+            from database import db
             cached_model = db.get_cached_arima_model(model_key)
 
         if cached_model:

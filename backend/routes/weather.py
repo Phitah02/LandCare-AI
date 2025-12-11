@@ -7,7 +7,7 @@ import pandas as pd
 from models.schemas import ForecastResponse, WeatherForecastRequest
 from auth.dependencies import get_current_user
 from weather_integration import get_weather_data, get_weather_forecast
-from models import db
+from database import db
 
 router = APIRouter()
 
