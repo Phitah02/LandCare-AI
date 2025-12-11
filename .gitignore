@@ -70,3 +70,5 @@ TASKS_COMPLETED.txt
 
 eee
 test
+# Rust toolchain installer
+rustup-init.exe
