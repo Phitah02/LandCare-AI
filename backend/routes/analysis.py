@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends, BackgroundTasks
 from typing import Dict, Any
 
-from models.schemas import AnalysisRequest, AnalysisResponse
+from models.schemas import AnalysisRequest
 from auth.dependencies import get_current_user
 from gee_processor import get_ndvi, get_evi, get_savi, get_land_cover, get_slope_data, calculate_risk_score
 from weather_integration import get_weather_data
@@ -66,7 +66,7 @@ async def save_analysis_background(user_id: str, geometry: Dict[str, Any], resul
         print(f"Background save error: {e}")
 
 
-@router.post("/analyze", response_model=AnalysisResponse)
+@router.post("/analyze")
 async def analyze(
     request: AnalysisRequest,
     background_tasks: BackgroundTasks,
@@ -154,7 +154,8 @@ async def analyze(
         user_id = current_user['user_id']
         background_tasks.add_task(save_analysis_background, user_id, geometry, results)
 
-        return AnalysisResponse(**results)
+        # Return raw results dict so frontend can access provider-specific keys
+        return results
 
     except Exception as e:
-        return AnalysisResponse(error=str(e))
+        return {"error": str(e)}
