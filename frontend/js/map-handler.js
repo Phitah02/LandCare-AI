@@ -244,7 +244,7 @@ class MapHandler {
 
         // Create risk tag element with bold risk and score, and colored background
         const riskTag = L.divIcon({
-            html: `<div class="polygon-risk-tag ${riskLevel.toLowerCase().replace(' ', '-')}-risk" style="background-color: white; color: ${riskColor}; border-color: ${riskColor}; border: 2px solid ${riskColor}; font-size: 14px; padding: 4px;">
+            html: `<div class="polygon-risk-tag ${riskLevel.toLowerCase().replace(' ', '-')}-risk" style="background-color: ${riskColor}; color: ${riskColor}; border-color: ${riskColor}; border: 2px solid ${riskColor}; font-size: 14px; padding: 4px;">
                 <strong style="font-size: 16px;">${riskLevel}</strong><br><small><strong style="font-size: 14px;">${(riskScore * 100).toFixed(0)}%</strong></small>
             </div>`,
             className: 'polygon-risk-tag-container',
