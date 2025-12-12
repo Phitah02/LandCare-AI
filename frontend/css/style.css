@@ -1712,7 +1712,7 @@ button:disabled {
 
 .polygon-risk-tag.medium-risk {
     border-color: #ffc107;
-    color: #f57c00;
+    color: #ffc107;
 }
 
 .polygon-risk-tag.low-risk {

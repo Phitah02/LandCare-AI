@@ -234,7 +234,7 @@ class MapHandler {
         // Remove existing risk tag if any
         this.clearPolygonRiskTag();
 
-        // Get risk color for styling
+        // Get risk color for styling - match legend colors exactly
         let riskColor = '#28a745'; // Default low risk
         if (riskLevel.toLowerCase() === 'high') {
             riskColor = '#d32f2f';
@@ -242,9 +242,9 @@ class MapHandler {
             riskColor = '#ffc107';
         }
 
-        // Create risk tag element with bold risk and score, and colored background
+        // Create risk tag element with white background and colored text/border
         const riskTag = L.divIcon({
-            html: `<div class="polygon-risk-tag ${riskLevel.toLowerCase().replace(' ', '-')}-risk" style="background-color: ${riskColor}; color: ${riskColor}; border-color: ${riskColor}; border: 2px solid ${riskColor}; font-size: 14px; padding: 4px;">
+            html: `<div class="polygon-risk-tag ${riskLevel.toLowerCase().replace(' ', '-')}-risk" style="color: ${riskColor}; border-color: ${riskColor}; font-size: 14px; padding: 4px;">
                 <strong style="font-size: 16px;">${riskLevel}</strong><br><small><strong style="font-size: 14px;">${(riskScore * 100).toFixed(0)}%</strong></small>
             </div>`,
             className: 'polygon-risk-tag-container',
