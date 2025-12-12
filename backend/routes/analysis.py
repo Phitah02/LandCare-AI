@@ -117,15 +117,38 @@ async def analyze(
 
         # Calculate comprehensive risk score synchronously
         if 'ndvi' in results and 'land_cover' in results:
-            risk_assessment = calculate_risk_score(
-                results.get('ndvi', {}),
-                results.get('land_cover', {}),
-                results.get('slope', {}),
-                results.get('weather', {}),
-                results.get('evi', {}),
-                results.get('savi', {})
-            )
-            results['risk_assessment'] = risk_assessment
+            try:
+                risk_assessment = calculate_risk_score(
+                    results.get('ndvi', {}),
+                    results.get('land_cover', {}),
+                    results.get('slope', {}),
+                    results.get('weather', {}),
+                    results.get('evi', {}),
+                    results.get('savi', {})
+                )
+                results['risk_assessment'] = risk_assessment
+            except Exception as risk_error:
+                print(f"Risk assessment calculation error: {risk_error}")
+                # Set default risk assessment with mock factors
+                results['risk_assessment'] = {
+                    'overall_risk_score': 0.5,
+                    'risk_level': 'Medium Risk',
+                    'risk_color': '#ffc107',
+                    'risk_factors': {
+                        'vegetation_risk': 0.4,
+                        'land_cover_risk': 0.5,
+                        'erosion_risk': 0.4,
+                        'weather_risk': 0.3
+                    },
+                    'recommendations': [
+                        'Monitor land condition closely',
+                        'Consider preventive measures',
+                        'Implement sustainable land management practices'
+                    ],
+                    'note': 'Mock data due to calculation error',
+                    'data_source': 'mock',
+                    'source_details': 'Fallback mock risk assessment'
+                }
 
         # Save analysis to database via background task
         user_id = current_user['user_id']
