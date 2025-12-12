@@ -650,10 +650,13 @@ class LandCareApp {
         if (results.risk_assessment) {
             const riskLevelEl = document.getElementById('risk-level');
             const riskScoreEl = document.getElementById('risk-score');
+            const overviewRiskLevelEl = document.getElementById('overview-risk-level');
+            const overviewRiskScoreEl = document.getElementById('overview-risk-score');
 
             if (results.risk_assessment.overall_risk_score !== undefined) {
                 const score = results.risk_assessment.overall_risk_score;
                 if (riskScoreEl) riskScoreEl.textContent = score.toFixed(2);
+                if (overviewRiskScoreEl) overviewRiskScoreEl.textContent = `(${score.toFixed(2)})`; // Show score in parentheses
 
                 let riskLevel = 'Unknown';
                 if (score >= 0.6) riskLevel = 'High';
@@ -661,6 +664,7 @@ class LandCareApp {
                 else riskLevel = 'Low';
 
                 if (riskLevelEl) riskLevelEl.textContent = riskLevel;
+                if (overviewRiskLevelEl) overviewRiskLevelEl.textContent = riskLevel;
 
                 // Update risk indicator color
                 const riskIndicator = document.getElementById('risk-indicator');
@@ -713,7 +717,7 @@ class LandCareApp {
                                 levelEl.classList.add('low-risk');
                             }
 
-                            if (levelEl) levelEl.textContent = riskLevel;
+                            if (levelEl) levelEl.textContent = `${riskLevel} (${percentage.toFixed(0)}%)`;
                         }
                     }
                 };
@@ -771,7 +775,8 @@ class LandCareApp {
         const elementsToReset = [
             'ndvi-value', 'evi-value', 'savi-value', 'area-value',
             'land-cover-summary', 'slope-value', 'temperature-value', 'humidity-value',
-            'weather-description-value', 'risk-level', 'risk-score'
+            'weather-description-value', 'risk-level', 'risk-score',
+            'overview-risk-level', 'overview-risk-score'
         ];
 
         elementsToReset.forEach(id => {
