@@ -27,6 +27,8 @@ class VegetationIndex(BaseModel):
 class LandCover(BaseModel):
     class_name: Optional[str] = None
     confidence: Optional[float] = None
+    land_cover_types: Optional[Dict[str, Any]] = None
+    land_cover_areas: Optional[Dict[str, Any]] = None
 
 
 class WeatherData(BaseModel):

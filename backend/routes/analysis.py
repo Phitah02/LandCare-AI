@@ -94,7 +94,10 @@ async def analyze(
         results['ndvi'] = ndvi_result
         results['evi'] = evi_result
         results['savi'] = savi_result
-        results['land_cover'] = land_cover_result
+        results['land_cover'] = {
+            'land_cover_types': land_cover_result.get('land_cover_types'),
+            'land_cover_areas': land_cover_result.get('land_cover_areas')
+        }
         results['slope'] = slope_result
 
         # Get weather data asynchronously if centroid provided
