@@ -63,6 +63,32 @@ app.add_middleware(
 )
 
 
+# Ensure CORS headers are present even when an exception or upstream error occurs
+@app.middleware("http")
+async def ensure_cors_headers(request, call_next):
+    try:
+        response = await call_next(request)
+    except Exception as e:
+        # Build a minimal response for unexpected errors so we can attach CORS headers
+        from fastapi.responses import JSONResponse
+        response = JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
+    # Add Access-Control-Allow-Origin if missing
+    origin = request.headers.get("origin")
+    allowed = settings.cors_origins or []
+    if origin and origin in allowed:
+        response.headers.setdefault("Access-Control-Allow-Origin", origin)
+    else:
+        # Fallback to wildcard only if no specific origin matched
+        response.headers.setdefault("Access-Control-Allow-Origin", "*")
+
+    response.headers.setdefault("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
+    response.headers.setdefault("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, Accept, Accept-Encoding, Accept-Language, Cache-Control, Connection, Host, Origin, Referer, User-Agent")
+    response.headers.setdefault("Access-Control-Allow-Credentials", "true")
+
+    return response
+
+
 # Import routers
 from routes.analysis import router as analysis_router
 from routes.forecasting import router as forecasting_router
