@@ -4101,7 +4101,7 @@ class LandCareApp {
                 this.currentPolygon;
 
             // Call the actual backend API for ML forecasting
-            const response = await fetch('https://landcare-ai-1.onrender.com/forecasting/vegetation', {
+            const response = await fetch('https://landcare-ai-1.onrender.com/api/forecast/vegetation', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4130,7 +4130,7 @@ class LandCareApp {
             const maxAttempts = 60; // 5 minutes max wait
 
             while (attempts < maxAttempts) {
-                const statusResponse = await fetch(`https://landcare-ai-1.onrender.com/forecasting/status/${taskId}`, {
+                const statusResponse = await fetch(`https://landcare-ai-1.onrender.com/api/forecast/status/${taskId}`, {
                     headers: {
                         'Authorization': `Bearer ${this.authToken}`
                     }
