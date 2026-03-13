@@ -3429,7 +3429,7 @@ class LandCareApp {
             csvContent += `${label}`;
             datasets.forEach(ds => {
                 if (ds.label && !ds.label.includes('Upper') && !ds.label.includes('Lower')) {
-                    const value = ds.data[i] !== undefined ? ds.data[i] : '';
+                    const value = ds.data[i] !== undefined ? (ds.data[i].y !== undefined ? ds.data[i].y : ds.data[i]) : '';
                     csvContent += `,${value}`;
                 }
             });
