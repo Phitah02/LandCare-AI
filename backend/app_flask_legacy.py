@@ -279,19 +279,20 @@ def geocode():
         if not place_name:
             return jsonify({'error': 'No place name provided'}), 400
         
-        # Use Nominatim (OpenStreetMap) geocoding service
-        url = 'https://nominatim.openstreetmap.org/search'
+        # Use LocationIQ Geocoding API
+        api_key = Config.LOCATIONIQ_API_KEY
+        if not api_key or api_key == 'your-locationiq-api-key-here':
+            return jsonify({'error': 'Geocoding service not configured'}), 500
+        
+        url = 'https://us1.locationiq.com/v1/search.php'
         params = {
+            'key': api_key,
             'q': place_name,
             'format': 'json',
-            'limit': 1,
-            'addressdetails': 1
-        }
-        headers = {
-            'User-Agent': 'LandCare-AI/1.0'
+            'limit': 1
         }
         
-        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response = requests.get(url, params=params, timeout=10)
         
         if response.status_code == 200:
             results = response.json()
