@@ -3410,8 +3410,39 @@ class LandCareApp {
     }
 
     exportChartJsAsCSV(chart, title, chartId) {
-        const labels = chart.data.labels || [];
         const datasets = chart.data.datasets || [];
+        
+        // Extract labels from datasets when chart.data.labels is empty
+        // (Time-series charts store dates in datasets, not in labels array)
+        let labels = chart.data.labels || [];
+        if (labels.length === 0 && datasets.length > 0) {
+            // Find the first dataset with data
+            const firstDs = datasets.find(ds => ds.data && ds.data.length > 0);
+            if (firstDs) {
+                labels = firstDs.data.map(d => {
+                    if (d.x instanceof Date) {
+                        return d.x.toISOString().split('T')[0];
+                    } else if (typeof d.x === 'string') {
+                        return d.x;
+                    } else if (typeof d === 'object' && d.x) {
+                        // Handle already-parsed date strings
+                        return typeof d.x === 'string' ? d.x.split('T')[0] : String(d.x);
+                    }
+                    return String(d);
+                });
+            }
+        }
+        
+        // If still no labels, generate sequential indices
+        if (labels.length === 0 && datasets.length > 0) {
+            const maxLength = Math.max(...datasets.map(ds => ds.data ? ds.data.length : 0));
+            labels = Array.from({length: maxLength}, (_, i) => `Point ${i + 1}`);
+        }
+        
+        if (labels.length === 0) {
+            this.showError('No data available to export');
+            return;
+        }
         
         let csvContent = 'data:text/csv;charset=utf-8,';
         
@@ -3429,7 +3460,15 @@ class LandCareApp {
             csvContent += `${label}`;
             datasets.forEach(ds => {
                 if (ds.label && !ds.label.includes('Upper') && !ds.label.includes('Lower')) {
-                    const value = ds.data[i] !== undefined ? (ds.data[i].y !== undefined ? ds.data[i].y : ds.data[i]) : '';
+                    const dataPoint = ds.data ? ds.data[i] : undefined;
+                    let value = '';
+                    if (dataPoint !== undefined && dataPoint !== null) {
+                        if (typeof dataPoint === 'object') {
+                            value = dataPoint.y !== undefined ? dataPoint.y : JSON.stringify(dataPoint);
+                        } else {
+                            value = dataPoint;
+                        }
+                    }
                     csvContent += `,${value}`;
                 }
             });
