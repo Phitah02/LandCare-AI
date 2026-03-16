@@ -212,7 +212,24 @@ class GEEForecaster:
         def create_monthly_composite(month_offset):
             start = ee.Date(self.start_date).advance(month_offset, 'month')
             end = start.advance(1, 'month')
-            monthly = vi_collection.filterDate(start, end).mean()
+            monthly_collection = vi_collection.filterDate(start, end)
+
+            # If a month has no images (clouds/coverage/ROI too small), .mean() can
+            # produce an Image with no bands, which later breaks .select('EVI').
+            # Return a fully-masked placeholder that still has NDVI/SAVI/EVI bands.
+            empty_vi = (
+                ee.Image.constant([0, 0, 0])
+                .rename(['NDVI', 'SAVI', 'EVI'])
+                .updateMask(ee.Image(0))
+            )
+
+            monthly = ee.Image(
+                ee.Algorithms.If(
+                    monthly_collection.size().gt(0),
+                    monthly_collection.mean().select(['NDVI', 'SAVI', 'EVI']),
+                    empty_vi
+                )
+            )
             return monthly.set('system:time_start', start.millis())
 
         monthly_vi = ee.ImageCollection.fromImages(months.map(create_monthly_composite))
