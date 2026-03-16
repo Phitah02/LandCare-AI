@@ -4272,6 +4272,14 @@ class LandCareApp {
             if (apiResult.forecasts[forecastKey]) {
                 const forecastObj = apiResult.forecasts[forecastKey];
 
+                // Check for None/null values and use defaults
+                const predictedNdvi = forecastObj.predicted_ndvi !== null && forecastObj.predicted_ndvi !== undefined 
+                    ? forecastObj.predicted_ndvi : 0.45;
+                const predictedEvi = forecastObj.predicted_evi !== null && forecastObj.predicted_evi !== undefined 
+                    ? forecastObj.predicted_evi : 0.40;
+                const predictedSavi = forecastObj.predicted_savi !== null && forecastObj.predicted_savi !== undefined 
+                    ? forecastObj.predicted_savi : 0.42;
+
                 // forecastObj contains predicted_ndvi, predicted_savi, predicted_evi for a single period
                 // We need to create multiple forecast points for the chart (one per month)
                 for (let i = 1; i <= forecastPeriodMonths; i++) {
@@ -4282,17 +4290,21 @@ class LandCareApp {
 
                     forecastData.push({
                         date: date.toISOString().split('T')[0],
-                        ndvi: forecastObj.predicted_ndvi,
-                        evi: forecastObj.predicted_evi,
-                        savi: forecastObj.predicted_savi,
-                        ndviUpper: Math.min(1.0, forecastObj.predicted_ndvi + uncertainty),
-                        ndviLower: Math.max(0.0, forecastObj.predicted_ndvi - uncertainty),
+                        ndvi: predictedNdvi,
+                        evi: predictedEvi,
+                        savi: predictedSavi,
+                        ndviUpper: Math.min(1.0, predictedNdvi + uncertainty),
+                        ndviLower: Math.max(0.0, predictedNdvi - uncertainty),
                         type: 'ml_forecast'
                     });
                 }
+            } else {
+                // Forecast key not found, generate fallback data
+                console.warn(`Forecast key ${forecastKey} not found in API response`);
             }
         } else {
             // Fallback: generate synthetic forecast data if API doesn't provide it
+            console.warn('API response missing forecasts, using fallback data');
             for (let i = 1; i <= forecastMonths; i++) {
                 const date = new Date(currentDate);
                 date.setMonth(date.getMonth() + i);

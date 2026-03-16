@@ -520,6 +520,24 @@ class GEEForecaster:
         training_samples = samples_with_random.filter(ee.Filter.lt('random', 1 - self.model_settings['test_size']))
         testing_samples = samples_with_random.filter(ee.Filter.gte('random', 1 - self.model_settings['test_size']))
 
+        # Debug: Check sample counts
+        try:
+            training_count = training_samples.size().getInfo()
+            testing_count = testing_samples.size().getInfo()
+            print(f"[DEBUG] Training samples: ~{int(training_count) if training_count else 0}")
+            print(f"[DEBUG] Testing samples: ~{int(testing_count) if testing_count else 0}")
+            
+            if training_count is None:
+                print("[DEBUG] ERROR: training_samples.size().getInfo() returned None!")
+                raise ValueError("GEE returned None for training sample count. The ROI may have no valid satellite data.")
+            if training_count == 0:
+                raise ValueError("No training samples collected. ROI may be too small or have no valid data.")
+            if testing_count is None or testing_count == 0:
+                raise ValueError("No testing samples collected. ROI may be too small.")
+        except Exception as e:
+            print(f"[DEBUG] Error getting sample counts: {e}")
+            raise ValueError(f"Failed to get sample counts: {str(e)}")
+
         # Define classifiers for each vegetation index
         def create_classifier():
             return ee.Classifier.smileRandomForest(
@@ -782,15 +800,35 @@ class GEEForecaster:
             savi_mean = get_mean_prediction(savi_prediction)
             evi_mean = get_mean_prediction(evi_prediction)
 
-            # Note: In production, avoid getInfo() calls - return the image for client-side processing
-            ndvi_value = ndvi_mean.getInfo() if ndvi_mean else 0.5
-            savi_value = savi_mean.getInfo() if savi_mean else 0.4
-            evi_value = evi_mean.getInfo() if evi_mean else 0.3
+            # Note: In production, avoid getInfo() calls - return the image for client-side processing.
+            # reduceRegion().get(...) can legitimately evaluate to None (e.g., fully masked ROI),
+            # which would crash float(None). Guard and use sensible defaults.
+            def _safe_number(value, default):
+                try:
+                    if value is None:
+                        return default
+                    n = float(value)
+                    # Basic sanity: allow 0..1-ish but don't hard clamp; just fall back if NaN.
+                    if n != n:  # NaN check
+                        return default
+                    return n
+                except Exception:
+                    return default
+
+            def _safe_getinfo(ee_obj):
+                try:
+                    return ee_obj.getInfo()
+                except Exception:
+                    return None
+
+            ndvi_value = _safe_number(_safe_getinfo(ndvi_mean), 0.5)
+            savi_value = _safe_number(_safe_getinfo(savi_mean), 0.4)
+            evi_value = _safe_number(_safe_getinfo(evi_mean), 0.3)
 
             forecasts[f'{period}_months'] = {
-                'predicted_ndvi': float(ndvi_value),
-                'predicted_savi': float(savi_value),
-                'predicted_evi': float(evi_value),
+                'predicted_ndvi': ndvi_value,
+                'predicted_savi': savi_value,
+                'predicted_evi': evi_value,
                 'period_months': period,
                 'forecast_date': future_date.format('YYYY-MM-dd').getInfo()
             }
@@ -888,6 +926,23 @@ class GEEForecaster:
             self.train_gee_random_forests()
 
             # Initialize results
+            training_samples_count = 0
+            testing_samples_count = 0
+            
+            try:
+                if self.training_samples:
+                    training_count = self.training_samples.size().getInfo()
+                    training_samples_count = int(training_count) if training_count is not None else 0
+            except Exception as e:
+                print(f"Error getting training samples count: {e}")
+                
+            try:
+                if self.testing_samples:
+                    testing_count = self.testing_samples.size().getInfo()
+                    testing_samples_count = int(testing_count) if testing_count is not None else 0
+            except Exception as e:
+                print(f"Error getting testing samples count: {e}")
+            
             result = {
                 "status": "success",
                 "model_info": {
@@ -895,8 +950,8 @@ class GEEForecaster:
                     "models": ["NDVI", "SAVI", "EVI"],
                     "numberOfTrees": self.model_settings['numberOfTrees'],
                     "maxNodes": self.model_settings['maxNodes'],
-                    "training_samples": int(self.training_samples.size().getInfo()),
-                    "testing_samples": int(self.testing_samples.size().getInfo())
+                    "training_samples": training_samples_count,
+                    "testing_samples": testing_samples_count
                 }
             }
 
@@ -935,6 +990,24 @@ class GEEForecaster:
 
             print("Making forecasts...")
             forecasts = self.forecast_vegetation_indices(periods)
+            
+            # Safely get training and testing sample counts
+            training_samples_count = 0
+            testing_samples_count = 0
+            
+            try:
+                if self.training_samples:
+                    training_count = self.training_samples.size().getInfo()
+                    training_samples_count = int(training_count) if training_count is not None else 0
+            except Exception as e:
+                print(f"Error getting training samples count in forecast: {e}")
+                
+            try:
+                if self.testing_samples:
+                    testing_count = self.testing_samples.size().getInfo()
+                    testing_samples_count = int(testing_count) if testing_count is not None else 0
+            except Exception as e:
+                print(f"Error getting testing samples count in forecast: {e}")
 
             return {
                 "status": "success",
@@ -944,8 +1017,8 @@ class GEEForecaster:
                     "models": ["NDVI", "SAVI", "EVI"],
                     "numberOfTrees": self.model_settings['numberOfTrees'],
                     "maxNodes": self.model_settings['maxNodes'],
-                    "training_samples": int(self.training_samples.size().getInfo()) if self.training_samples else 0,
-                    "testing_samples": int(self.testing_samples.size().getInfo()) if self.testing_samples else 0
+                    "training_samples": training_samples_count,
+                    "testing_samples": testing_samples_count
                 }
             }
 

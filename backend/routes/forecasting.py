@@ -23,11 +23,22 @@ async def run_ml_forecast_background(task_id: str, geometry: Dict[str, Any], per
         start_time = asyncio.get_event_loop().time()
         background_tasks_store[task_id] = {'status': 'processing', 'start_time': start_time}
 
+        # Debug: Log the geometry info
+        print(f"[DEBUG] ML Forecast Task {task_id}: Processing geometry with {len(geometry.get('coordinates', []))} coordinate rings")
+        if geometry.get('coordinates'):
+            first_ring = geometry['coordinates'][0] if geometry['coordinates'] else []
+            if first_ring:
+                # Calculate bounding box
+                lats = [c[1] for c in first_ring]
+                lons = [c[0] for c in first_ring]
+                print(f"[DEBUG] ML Forecast Task {task_id}: ROI bounding box - Lat: {min(lats):.4f} to {max(lats):.4f}, Lon: {min(lons):.4f} to {max(lons):.4f}")
+                print(f"[DEBUG] ML Forecast Task {task_id}: ROI approx size - Lat span: {max(lats)-min(lats):.4f} deg, Lon span: {max(lons)-min(lons):.4f} deg")
+
         # Initialize GEE if not already done
         if not initialize_gee():
             background_tasks_store[task_id] = {
                 'status': 'failed',
-                'error': 'Google Earth Engine initialization failed',
+                'error': 'Google Earth Engine initialization failed. Please ensure GEE is properly configured.',
                 'start_time': start_time,
                 'end_time': asyncio.get_event_loop().time()
             }
@@ -35,7 +46,16 @@ async def run_ml_forecast_background(task_id: str, geometry: Dict[str, Any], per
 
         # Convert geometry to GEE format
         import ee
-        roi = ee.Geometry.Polygon(geometry['coordinates'])
+        try:
+            roi = ee.Geometry.Polygon(geometry['coordinates'])
+        except Exception as e:
+            background_tasks_store[task_id] = {
+                'status': 'failed',
+                'error': f'Invalid geometry format: {str(e)}',
+                'start_time': start_time,
+                'end_time': asyncio.get_event_loop().time()
+            }
+            return
 
         # Use last 2 years of data for training
         import datetime
@@ -43,10 +63,29 @@ async def run_ml_forecast_background(task_id: str, geometry: Dict[str, Any], per
         start_date = (datetime.datetime.now() - datetime.timedelta(days=730)).strftime('%Y-%m-%d')
 
         # Initialize forecaster
-        forecaster = GEEForecaster(roi, start_date, end_date)
+        try:
+            forecaster = GEEForecaster(roi, start_date, end_date)
+        except Exception as e:
+            background_tasks_store[task_id] = {
+                'status': 'failed',
+                'error': f'Failed to initialize forecaster: {str(e)}',
+                'start_time': start_time,
+                'end_time': asyncio.get_event_loop().time()
+            }
+            return
 
         # Train models
-        training_result = forecaster.train_models(include_validation=False, include_cv=False)
+        try:
+            training_result = forecaster.train_models(include_validation=False, include_cv=False)
+        except Exception as e:
+            background_tasks_store[task_id] = {
+                'status': 'failed',
+                'error': f'Model training failed: {str(e)}',
+                'start_time': start_time,
+                'end_time': asyncio.get_event_loop().time()
+            }
+            return
+            
         if 'error' in training_result:
             background_tasks_store[task_id] = {
                 'status': 'failed',
@@ -57,7 +96,17 @@ async def run_ml_forecast_background(task_id: str, geometry: Dict[str, Any], per
             return
 
         # Make forecasts
-        forecast_result = forecaster.forecast(periods)
+        try:
+            forecast_result = forecaster.forecast(periods)
+        except Exception as e:
+            background_tasks_store[task_id] = {
+                'status': 'failed',
+                'error': f'Forecasting failed: {str(e)}',
+                'start_time': start_time,
+                'end_time': asyncio.get_event_loop().time()
+            }
+            return
+            
         if 'error' in forecast_result:
             background_tasks_store[task_id] = {
                 'status': 'failed',
