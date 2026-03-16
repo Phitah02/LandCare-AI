@@ -36,7 +36,8 @@ async def get_task_status(task_id: str):
         response['start_time'] = task['start_time']
     if 'end_time' in task:
         response['end_time'] = task['end_time']
-        response['duration'] = task['end_time'] - task['start_time']
+        if 'start_time' in task and task['start_time'] is not None:
+            response['duration'] = task['end_time'] - task['start_time']
 
     return response
 

@@ -20,13 +20,15 @@ background_tasks_store: Dict[str, Dict[str, Any]] = {}
 async def run_ml_forecast_background(task_id: str, geometry: Dict[str, Any], periods: list, user_id: str, use_fallback: bool = True):
     """Background task to train and forecast with GEEForecaster."""
     try:
-        background_tasks_store[task_id] = {'status': 'processing', 'start_time': asyncio.get_event_loop().time()}
+        start_time = asyncio.get_event_loop().time()
+        background_tasks_store[task_id] = {'status': 'processing', 'start_time': start_time}
 
         # Initialize GEE if not already done
         if not initialize_gee():
             background_tasks_store[task_id] = {
                 'status': 'failed',
                 'error': 'Google Earth Engine initialization failed',
+                'start_time': start_time,
                 'end_time': asyncio.get_event_loop().time()
             }
             return
@@ -49,6 +51,7 @@ async def run_ml_forecast_background(task_id: str, geometry: Dict[str, Any], per
             background_tasks_store[task_id] = {
                 'status': 'failed',
                 'error': f'Model training failed: {training_result["error"]}',
+                'start_time': start_time,
                 'end_time': asyncio.get_event_loop().time()
             }
             return
@@ -59,6 +62,7 @@ async def run_ml_forecast_background(task_id: str, geometry: Dict[str, Any], per
             background_tasks_store[task_id] = {
                 'status': 'failed',
                 'error': f'Forecasting failed: {forecast_result["error"]}',
+                'start_time': start_time,
                 'end_time': asyncio.get_event_loop().time()
             }
             return
@@ -82,6 +86,7 @@ async def run_ml_forecast_background(task_id: str, geometry: Dict[str, Any], per
                 'method_used': 'ml',
                 'fallback_used': False
             },
+            'start_time': start_time,
             'end_time': asyncio.get_event_loop().time()
         }
 
@@ -89,6 +94,7 @@ async def run_ml_forecast_background(task_id: str, geometry: Dict[str, Any], per
         background_tasks_store[task_id] = {
             'status': 'failed',
             'error': str(e),
+            'start_time': background_tasks_store.get(task_id, {}).get('start_time'),
             'end_time': asyncio.get_event_loop().time()
         }
 
@@ -155,7 +161,8 @@ async def get_forecast_status(
         response['start_time'] = task['start_time']
     if 'end_time' in task:
         response['end_time'] = task['end_time']
-        response['duration'] = task['end_time'] - task['start_time']
+        if 'start_time' in task and task['start_time'] is not None:
+            response['duration'] = task['end_time'] - task['start_time']
 
     return response
 
