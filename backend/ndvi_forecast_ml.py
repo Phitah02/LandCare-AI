@@ -439,13 +439,24 @@ class GEEForecaster:
 
         # Create a function to join features
         def join_features(image):
-            date = ee.Date(image.get('system:time_start'))
+            time_start = image.get('system:time_start')
 
-            # Find corresponding meteorological data
-            meteo_match = (self.meteo_collection
-                          .filter(ee.Filter.dateRangeContains(
-                              {'start': date, 'end': date.advance(1, 'month')}))
-                          .first())
+            # Find corresponding meteorological data.
+            # IMPORTANT: ee.Filter.dateRangeContains expects leftField to be a STRING
+            # property name, not a {start,end} dictionary. Since both monthly
+            # composites set 'system:time_start', match directly on that.
+            meteo_first = self.meteo_collection.filter(
+                ee.Filter.eq('system:time_start', time_start)
+            ).first()
+
+            # If no matching meteo image exists, add a fully-masked placeholder
+            # with the expected band schema.
+            empty_meteo = (
+                ee.Image.constant([0, 0, 0, 0, 0])
+                .rename(['precip_monthly', 'precip_1month_sum', 'precip_3month_sum', 'temp_monthly', 'vpd_monthly'])
+                .updateMask(ee.Image(0))
+            )
+            meteo_match = ee.Image(ee.Algorithms.If(meteo_first, meteo_first, empty_meteo))
 
             # Combine all bands
             combined = (ee.Image(image)
@@ -453,7 +464,7 @@ class GEEForecaster:
                        .addBands(self.topo_image)
                        .addBands(self.soil_image))
 
-            return combined.set('system:time_start', date.millis())
+            return combined.set('system:time_start', time_start)
 
         # Apply joining to NDVI collection
         combined_collection = self.vi_lagged.map(join_features)
