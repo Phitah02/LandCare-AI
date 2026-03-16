@@ -2369,6 +2369,11 @@ class LandCareApp {
                 startDate.setDate(today.getDate() - 365);
                 endDate = new Date(today);
                 break;
+            case 'period-10months':
+                startDate = new Date(today);
+                startDate.setMonth(today.getMonth() - 10);
+                endDate = new Date(today);
+                break;
             case 'period-1year':
                 startDate = new Date(today);
                 startDate.setFullYear(today.getFullYear() - 1);

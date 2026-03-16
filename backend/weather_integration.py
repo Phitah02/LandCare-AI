@@ -1,6 +1,6 @@
 import requests
 from config.config import Config
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import ee
 import numpy as np
 
@@ -411,6 +411,14 @@ def _get_historical_weather_single_request(lat, lon, start_date, end_date):
 def get_historical_weather(lat, lon, start_date=None, end_date=None, api_key=None):
     """Get historical weather data using Open-Meteo Archive API with chunked requests for long ranges."""
     try:
+        # Normalize timezone-aware datetimes to naive UTC for safe arithmetic/comparisons.
+        # FastAPI parses ISO strings with 'Z' into timezone-aware datetimes, but this module
+        # mixes in naive datetimes (e.g., datetime(year, 12, 31)) during chunking.
+        if isinstance(start_date, datetime) and start_date.tzinfo is not None:
+            start_date = start_date.astimezone(timezone.utc).replace(tzinfo=None)
+        if isinstance(end_date, datetime) and end_date.tzinfo is not None:
+            end_date = end_date.astimezone(timezone.utc).replace(tzinfo=None)
+
         # Handle backward compatibility - if start_date/end_date not provided, use years=1
         if start_date is None or end_date is None:
             end_date = datetime.now()
