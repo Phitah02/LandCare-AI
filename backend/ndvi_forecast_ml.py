@@ -227,8 +227,11 @@ class GEEForecaster:
         if self.vi_collection is None:
             raise ValueError("VI collection not loaded. Call load_ndvi_data() first.")
 
-        # Convert collection to list for easier manipulation
-        vi_list = self.vi_collection.toList(self.vi_collection.size())
+        # Convert collection to list for easier manipulation.
+        # NOTE: ee.List.map() passes only ONE argument (the list element). If we
+        # need an index, we must map over an index list and look up elements.
+        collection_size = self.vi_collection.size()
+        vi_list = self.vi_collection.toList(collection_size)
 
         def add_lags(image, index):
             index = ee.Number(index)
@@ -298,8 +301,10 @@ class GEEForecaster:
                     .addBands(ee.Image(evi_lag2).rename('EVI_lag2'))
                     .addBands(ee.Image(evi_lag12).rename('EVI_lag12')))
 
-        # Apply lag creation to each image
-        lagged_collection = ee.ImageCollection(vi_list.map(add_lags))
+        # Apply lag creation to each image (index-aware, server-side).
+        indices = ee.List.sequence(0, collection_size.subtract(1))
+        lagged_images = indices.map(lambda i: add_lags(vi_list.get(i), i))
+        lagged_collection = ee.ImageCollection(lagged_images)
 
         self.vi_lagged = lagged_collection
         return lagged_collection
